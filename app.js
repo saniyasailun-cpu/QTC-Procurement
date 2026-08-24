@@ -428,19 +428,31 @@ function animateValue(id, endValue, isCurrency = true, decimals = 2) {
 // -------------------------------------------------------------
 function renderExecutiveDashboard() {
   const scopedTxs = getActiveScopeTransactions();
-  
-  let totalSavings = 0;
-  let totalPurchase = 0;
   const poCount = scopedTxs.length;
 
-  scopedTxs.forEach(t => {
-    totalPurchase += t.totalPrice;
-    totalSavings += t.totalSaving;
-  });
-
   const monthlyAgg = getMonthlyAggregatedData();
-  let totalCreditSavings = monthlyAgg.reduce((sum, m) => sum + (m.creditSaving || 0), 0);
-  if (totalCreditSavings === 0 && (State.activeYear === '2026' || State.activeYear === 'ALL')) {
+  const isQuarterFiltered = State.activeQuarter !== 'ALL';
+  const targetMonths = isQuarterFiltered 
+    ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER)
+    : MONTH_ORDER;
+
+  const scopedMonthly = isQuarterFiltered
+    ? monthlyAgg.filter(r => targetMonths.includes(r.month))
+    : monthlyAgg;
+
+  let totalPurchase = scopedMonthly.reduce((sum, r) => sum + r.pv, 0);
+  let totalSavings = scopedMonthly.reduce((sum, r) => sum + r.cr, 0);
+
+  // Fallback คำนวณจากรายการสั่งซื้อกรณีที่ไม่มีข้อมูล summary
+  if (totalPurchase === 0 && scopedTxs.length > 0) {
+    scopedTxs.forEach(t => {
+      totalPurchase += t.totalPrice;
+      totalSavings += t.totalSaving;
+    });
+  }
+
+  let totalCreditSavings = scopedMonthly.reduce((sum, m) => sum + (m.creditSaving || 0), 0);
+  if (totalCreditSavings === 0 && (State.activeYear === '2026' || State.activeYear === 'ALL') && !isQuarterFiltered) {
     totalCreditSavings = 85669.64;
   }
 
