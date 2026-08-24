@@ -147,12 +147,42 @@ function updateThemeIcons() {
 }
 
 // โหลดข้อมูล
-function loadData() {
+async function loadData() {
   if (window.KPI_DATA) {
     State.data = window.KPI_DATA;
     setupDataset();
     renderAllViews();
+    return;
   }
+
+  // กรณี window.KPI_DATA ยังไม่โหลด (เช่น บน GitHub Pages หรือโฮสต์ภายนอก)
+  try {
+    const res = await fetch('data.json');
+    if (res.ok) {
+      const json = await res.json();
+      window.KPI_DATA = json;
+      State.data = json;
+      setupDataset();
+      renderAllViews();
+      return;
+    }
+  } catch (err) {
+    console.warn('Fallback data.json fetch failed:', err);
+  }
+
+  // ลองตรวจสอบซ้ำเป็นระยะเผื่อสคริปต์ data.js โหลดช้า
+  let attempts = 0;
+  const pollTimer = setInterval(() => {
+    attempts++;
+    if (window.KPI_DATA) {
+      clearInterval(pollTimer);
+      State.data = window.KPI_DATA;
+      setupDataset();
+      renderAllViews();
+    } else if (attempts >= 20) {
+      clearInterval(pollTimer);
+    }
+  }, 100);
 }
 
 function setupDataset() {
