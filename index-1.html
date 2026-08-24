@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QTC ENERGY PCL - ระบบติดตาม KPI การลดต้นทุนจัดซื้อและส่วนลดซัพพลายเออร์</title>
+  <meta name="description" content="ระบบรายงานและวิเคราะห์ผลการดำเนินงานจัดซื้อ การต่อรองราคา และการประหยัดต้นทุนประจำปี QTC ENERGY PCL.">
+  
+  <!-- Favicon -->
+  <link rel="icon" href="qtc-favicon.png" type="image/png">
+
+  <!-- Google Fonts: Prompt & Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js & SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- แถบเมนูด้านข้าง (Sidebar) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="qtc-brand-wrap">
+          <div class="logo-box">
+            <img src="qtc-logo.png" alt="QTC ENERGY PCL." class="qtc-logo-img">
+          </div>
+          <div class="brand-text-block">
+            <span class="company-name">QTC ENERGY PCL.</span>
+            <span class="system-tag">ระบบติดตามส่วนลดจัดซื้อ</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-nav">
+        <span class="nav-label">รายงานและการวิเคราะห์</span>
+        <a class="nav-item active" data-view="dashboard" id="nav-dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          ภาพรวมผู้บริหาร
+        </a>
+        <a class="nav-item" data-view="kpi-tracking" id="nav-kpi-tracking">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          สรุปผล KPI รายเดือน & รายปี
+        </a>
+        <a class="nav-item" data-view="transactions" id="nav-transactions">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          รายการสั่งซื้อ & ส่วนลด (PO)
+        </a>
+
+        <span class="nav-label">คู่ค้าและทีมงาน</span>
+        <a class="nav-item" data-view="suppliers" id="nav-suppliers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          ข้อมูลซัพพลายเออร์
+        </a>
+        <a class="nav-item" data-view="pic-team" id="nav-pic-team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+          ผลงานทีมจัดซื้อรายบุคคล
+        </a>
+
+        <span class="nav-label">เครื่องมือและจำลองตัวเลข</span>
+        <a class="nav-item" data-view="simulators" id="nav-simulators">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+          คำนวณ Kaizen & ขยายเครดิต
+        </a>
+        <a class="nav-item" data-view="data-import" id="nav-data-import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          จัดการไฟล์ข้อมูล Excel
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-avatar">QTC</div>
+          <div class="user-meta">
+            <div class="user-name">แผนกจัดซื้อ</div>
+            <div class="user-role">QTC ENERGY PCL.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- เนื้อหาหลัก (Main Body) -->
+    <div class="main-wrapper">
+      <!-- แถบด้านบน (Topbar) -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobile-toggle" aria-label="เปิด/ปิดเมนู">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="page-title">
+            <h2 id="current-view-title">ภาพรวมผู้บริหาร</h2>
+            <p id="current-view-desc">สรุปผลการต่อรองลดต้นทุนจัดซื้อและติดตามผลการดำเนินงานตามเป้าหมาย (QTC ENERGY)</p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- ตัวกรองปี -->
+          <div class="filter-pills" id="year-filter-group">
+            <button class="pill-btn active" data-year="2026">ปี 2568 (2026)</button>
+            <button class="pill-btn" data-year="2025">ปี 2567 (2025)</button>
+            <button class="pill-btn" data-year="2024">ปี 2566 (2024)</button>
+            <button class="pill-btn" data-year="2023">ปี 2565 (2023)</button>
+            <button class="pill-btn" data-year="ALL">ทุกปี</button>
+          </div>
+
+          <!-- ตัวกรองไตรมาส (Quarter Filters) -->
+          <div class="filter-pills" id="quarter-filter-group">
+            <button class="pill-btn active" data-quarter="ALL">ทั้งปี</button>
+            <button class="pill-btn" data-quarter="Q1">Q1</button>
+            <button class="pill-btn" data-quarter="Q2">Q2</button>
+            <button class="pill-btn" data-quarter="Q3">Q3</button>
+            <button class="pill-btn" data-quarter="Q4">Q4</button>
+          </div>
+
+          <!-- ปุ่มซิงค์ข้อมูล Google Sheet ด่วน -->
+          <button class="pill-btn" id="topbar-sync-btn" onclick="syncGoogleSheetNow()" title="ซิงค์ข้อมูลล่าสุดจาก Google Sheets" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 4px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span id="topbar-sync-label">ซิงค์สด</span>
+          </button>
+
+          <!-- พิมพ์รายงานด่วน -->
+          <button class="icon-btn" onclick="window.print()" title="พิมพ์รายงานสรุป (Print)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+
+          <!-- สลับโหมดมืด/สว่าง -->
+          <button class="icon-btn" id="theme-toggle-btn" title="เปลี่ยนโหมดมืด / สว่าง">
+            <svg id="theme-moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg id="theme-sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="content-container">
+
+        <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
+        <section class="view-section active" id="view-dashboard">
+          <!-- 4 การ์ดสรุป KPI ด้านบน -->
+          <div class="kpi-grid">
+            <!-- การ์ด 1: ยอดลดต้นทุนรวม -->
+            <div class="kpi-card accent-glow-emerald">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">รวมมูลค่าที่ต่อรองลดลงได้</span>
+                <div class="kpi-card-icon" style="color: var(--accent-emerald);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                </div>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-savings" style="color: var(--accent-emerald);">฿0.00</div>
+              <div class="kpi-card-footer">
+                <span class="kpi-card-subtext" id="kpi-savings-mb">0.00 ล้านบาท</span>
+                <span class="kpi-badge success" id="kpi-savings-rate">+0.0% ประหยัดได้</span>
+              </div>
+            </div>
+
+            <!-- การ์ด 2: ยอดสั่งซื้อรวม -->
+            <div class="kpi-card accent-glow-blue">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">มูลค่าการสั่งซื้อรวม</span>
+                <div class="kpi-card-icon" style="color: var(--accent-primary);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                </div>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-purchase">฿0.00</div>
+              <div class="kpi-card-footer">
+                <span class="kpi-card-subtext" id="kpi-purchase-mb">0.00 ล้านบาท</span>
+                <span class="kpi-badge warning" id="kpi-po-count">0 รายการ</span>
+              </div>
+            </div>
+
+            <!-- การ์ด 3: สถานะเป้าหมาย 3.0% พร้อม Circular Progress Gauge -->
+            <div class="kpi-card accent-glow-orange">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">สถานะเป้าหมาย KPI (3.00%)</span>
+                <div class="gauge-circle">
+                  <svg viewBox="0 0 36 36">
+                    <path class="gauge-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="gauge-bar" id="kpi-gauge-fill" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                  </svg>
+                  <div class="gauge-center-text" id="kpi-target-pct">0.0%</div>
+                </div>
+              </div>
+              <div class="kpi-card-value" id="kpi-target-rate-display">0.00%</div>
+              <div class="kpi-card-footer">
+                <span class="kpi-card-subtext" id="kpi-target-diff">เป้าหมาย 3.00%</span>
+                <span class="kpi-badge success" id="kpi-target-badge">ได้ตามเป้าหมาย</span>
+              </div>
+            </div>
+
+            <!-- การ์ด 4: ผลประหยัดเพิ่มเครดิตเทอม -->
+            <div class="kpi-card accent-glow-amber">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">ลดต้นทุนจากการเพิ่มเครดิตเทอม</span>
+                <div class="kpi-card-icon" style="color: var(--accent-orange);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+              </div>
+              <div class="kpi-card-value" id="kpi-credit-savings">฿85,669.64</div>
+              <div class="kpi-card-footer">
+                <span class="kpi-card-subtext">ดอกเบี้ย 4.25% ต่อปี</span>
+                <span class="kpi-badge success">ลดต้นทุนทางบัญชี</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- แถวชาร์ตหลัก: สลับดูกราฟรายเดือน vs กราฟสะสม S-Curve -->
+          <div class="main-charts-row">
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                    ผลการดำเนินงานลดต้นทุนเทียบเป้าหมาย 3%
+                  </div>
+                  <div class="card-header-sub">เปรียบเทียบมูลค่าสั่งซื้อ มูลค่าต่อรองได้ และเส้นเป้าหมาย 3%</div>
+                </div>
+                <!-- ปุ่มสลับโหมดชาร์ต -->
+                <div class="chart-mode-tabs">
+                  <button class="chart-tab-btn active" id="btn-chart-bar" onclick="setChartMode('bar')">กราฟแท่งรายเดือน</button>
+                  <button class="chart-tab-btn" id="btn-chart-curve" onclick="setChartMode('curve')">กราฟสะสม S-Curve</button>
+                </div>
+              </div>
+              <div class="chart-canvas-box">
+                <canvas id="monthlyTrendChart"></canvas>
+              </div>
+            </div>
+
+            <!-- สัดส่วนกลยุทธ์ด้านจัดซื้อ -->
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10h-10z"/></svg>
+                    สัดส่วนกลยุทธ์จัดซื้อ
+                  </div>
+                  <div class="card-header-sub">มูลค่าจำแนกตามวิธีและกลยุทธ์</div>
+                </div>
+              </div>
+              <div class="chart-canvas-box" style="min-height: 180px;">
+                <canvas id="strategyDonutChart"></canvas>
+              </div>
+              <div class="strategy-compact-list" id="strategy-breakdown-list"></div>
+            </div>
+          </div>
+
+          <!-- แถวที่ 2: สรุปผลงานทีม และ 5 อันดับซัพพลายเออร์ -->
+          <div class="two-column-row">
+            <!-- ทีมจัดซื้อ -->
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                    ผลงานการต่อรองของทีมจัดซื้อ (PIC)
+                  </div>
+                  <div class="card-header-sub">จัดอันดับยอดลดต้นทุนของเจ้าหน้าที่แต่ละท่าน</div>
+                </div>
+                <button class="btn-action btn-action-secondary" onclick="switchView('pic-team')">ดูทั้งหมด</button>
+              </div>
+              <div class="pic-compact-list" id="pic-overview-list"></div>
+            </div>
+
+            <!-- 5 อันดับซัพพลายเออร์ -->
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+                    5 อันดับซัพพลายเออร์ที่ลดต้นทุนได้สูงสุด
+                  </div>
+                  <div class="card-header-sub">คู่ค้าที่ได้รับการต่อรองส่วนลดสูงสุด</div>
+                </div>
+                <button class="btn-action btn-action-secondary" onclick="switchView('suppliers')">ดูทั้งหมด</button>
+              </div>
+              <div class="pic-compact-list" id="top-suppliers-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 2: สรุป KPI รายเดือน & รายปี ================= -->
+        <section class="view-section" id="view-kpi-tracking">
+          <div class="card-box" style="margin-bottom: 20px;">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">ตารางสรุปผลการดำเนินงานจัดซื้อรายเดือน</div>
+                <div class="card-header-sub">เปรียบเทียบมูลค่าจริงเทียบเป้าหมายการลดต้นทุน 3.0% (ปี 2568 / 2026)</div>
+              </div>
+              <button class="btn-action btn-action-primary" onclick="exportMonthlyKPIToCSV()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ส่งออก CSV
+              </button>
+            </div>
+            
+            <div class="table-scroll">
+              <table class="styled-table" id="monthly-kpi-table">
+                <thead>
+                  <tr>
+                    <th>เดือน</th>
+                    <th>มูลค่าสั่งซื้อ (บาท)</th>
+                    <th>มูลค่าต่อรองได้ (บาท)</th>
+                    <th>เป้าหมาย 3% (บาท)</th>
+                    <th>คิดเป็น % ส่วนลด</th>
+                    <th>ผลต่างเทียบเป้าหมาย</th>
+                    <th>สถานะ KPI</th>
+                    <th>ลดต้นทุนเพิ่มเครดิต (บาท)</th>
+                  </tr>
+                </thead>
+                <tbody id="monthly-kpi-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="two-column-row">
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">แนวโน้มการลดต้นทุนสะสมรายปี (2023 - 2026)</div>
+                  <div class="card-header-sub">เปรียบเทียบมูลค่าผลประหยัดต้นทุนในแต่ละปี (ล้านบาท)</div>
+                </div>
+              </div>
+              <div class="chart-canvas-box">
+                <canvas id="multiYearChart"></canvas>
+              </div>
+            </div>
+
+            <div class="card-box">
+              <div class="card-header-bar">
+                <div>
+                  <div class="card-header-title">ผลประหยัดจากการขยายเครดิตเทอม</div>
+                  <div class="card-header-sub">คิดผลประโยชน์ทางการเงินที่อัตราดอกเบี้ย 4.25% ต่อปี</div>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="styled-table">
+                  <thead>
+                    <tr>
+                      <th>เดือน</th>
+                      <th>วันที่ขยายเพิ่ม</th>
+                      <th>มูลค่าสั่งซื้อ (บาท)</th>
+                      <th>ลดต้นทุนทางบัญชี (บาท)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="credit-extension-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 3: รายการสั่งซื้อ (TRANSACTIONS) ================= -->
+        <section class="view-section" id="view-transactions">
+          <!-- แถบตัวกรองการค้นหา -->
+          <div class="table-filter-bar">
+            <div class="table-filter-inputs">
+              <div class="search-input-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="tx-search-input" placeholder="ค้นหาเลขที่ PO, ชื่อคู่ค้า, รายละเอียดสินค้า...">
+              </div>
+              <select class="select-filter" id="filter-tx-month">
+                <option value="ALL">All Months (ทุกเดือน)</option>
+                <option value="JAN">JAN</option>
+                <option value="FEB">FEB</option>
+                <option value="MAR">MAR</option>
+                <option value="APR">APR</option>
+                <option value="MAY">MAY</option>
+                <option value="JUN">JUN</option>
+                <option value="JUL">JUL</option>
+                <option value="AUG">AUG</option>
+                <option value="SEP">SEP</option>
+                <option value="OCT">OCT</option>
+                <option value="NOV">NOV</option>
+                <option value="DEC">DEC</option>
+              </select>
+              <select class="select-filter" id="filter-tx-pic">
+                <option value="ALL">All PIC (ผู้รับผิดชอบทั้งหมด)</option>
+                <option value="Pawina">Pawina</option>
+                <option value="Tanida">Tanida</option>
+                <option value="Yuwanit">Yuwanit</option>
+                <option value="Dusit">Dusit</option>
+                <option value="Saniya">Saniya</option>
+              </select>
+              <select class="select-filter" id="filter-tx-strategy">
+                <option value="ALL">All Strategy (กลยุทธ์ทั้งหมด)</option>
+                <option value="Compare + Negotiate">Compare + Negotiate</option>
+                <option value="Negotiate">Negotiate</option>
+                <option value="Avoidance">Avoidance</option>
+                <option value="Rebate">Rebate</option>
+                <option value="เพิ่มเครดิต">เพิ่มเครดิต</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-action btn-action-secondary" id="reset-filter-btn">ล้างตัวกรอง</button>
+              <button class="btn-action btn-action-primary" id="export-tx-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ส่งออก Excel
+              </button>
+            </div>
+          </div>
+
+          <!-- ตารางรายการ PO -->
+          <div class="table-wrap">
+            <div class="table-scroll">
+              <table class="styled-table" id="transaction-data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable" data-sort="month">เดือน</th>
+                    <th class="sortable" data-sort="poNo">เลขที่ PO</th>
+                    <th class="sortable" data-sort="supplier">ชื่อซัพพลายเออร์ / คู่ค้า</th>
+                    <th>รายละเอียดสินค้า/บริการ</th>
+                    <th class="sortable" data-sort="qty">จำนวน</th>
+                    <th>หน่วยนับ</th>
+                    <th class="sortable" data-sort="totalPrice">ราคารวม (บาท)</th>
+                    <th class="sortable" data-sort="totalSaving">รวมที่ต่อรองได้ (บาท)</th>
+                    <th class="sortable" data-sort="percentDiscount">% ส่วนลด</th>
+                    <th>ระดับส่วนลด</th>
+                    <th>กลยุทธ์</th>
+                    <th class="sortable" data-sort="pic">ผู้รับผิดชอบ</th>
+                  </tr>
+                </thead>
+                <tbody id="transaction-tbody"></tbody>
+              </table>
+            </div>
+
+            <!-- แถบแบ่งหน้า -->
+            <div class="table-pagination-footer">
+              <div id="pagination-info">แสดง 0 ถึง 0 จากทั้งหมด 0 รายการ</div>
+              <div class="page-btn-group">
+                <button class="page-num-btn" id="btn-prev-page" title="หน้าก่อนหน้า">‹</button>
+                <div id="page-numbers" style="display:flex;gap:3px;"></div>
+                <button class="page-num-btn" id="btn-next-page" title="หน้าถัดไป">›</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 4: ซัพพลายเออร์ (SUPPLIERS) ================= -->
+        <section class="view-section" id="view-suppliers">
+          <div class="card-box">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">การวิเคราะห์ข้อมูลคู่ค้า (ซัพพลายเออร์)</div>
+                <div class="card-header-sub">สรุปมูลค่าสั่งซื้อ ยอดส่วนลดที่ต่อรองได้ และกลยุทธ์หลักที่ใช้กับคู่ค้าแต่ละราย</div>
+              </div>
+              <div class="search-input-wrapper" style="max-width: 280px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="supplier-search-input" placeholder="ค้นหาชื่อคู่ค้า...">
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="styled-table">
+                <thead>
+                  <tr>
+                    <th>อันดับ</th>
+                    <th>ชื่อซัพพลายเออร์ / คู่ค้า</th>
+                    <th>จำนวน PO</th>
+                    <th>มูลค่าสั่งซื้อรวม (บาท)</th>
+                    <th>มูลค่าที่ต่อรองได้รวม (บาท)</th>
+                    <th>% ส่วนลดเฉลี่ย</th>
+                    <th>กลยุทธ์หลักที่ใช้</th>
+                  </tr>
+                </thead>
+                <tbody id="supplier-ranking-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 5: ทีมจัดซื้อ (PIC TEAM) ================= -->
+        <section class="view-section" id="view-pic-team">
+          <div class="card-box" style="margin-bottom: 20px;">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">สรุปผลงานทีมจัดซื้อรายบุคคล</div>
+                <div class="card-header-sub">สรุปยอดลดต้นทุน สัดส่วนผลงาน และจำนวนรายการสั่งซื้อของเจ้าหน้าที่แต่ละท่าน</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;" id="pic-full-leaderboard"></div>
+          </div>
+
+          <div class="card-box">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">ตารางกลยุทธ์ด้านจัดซื้อรายบุคคล</div>
+                <div class="card-header-sub">สรุปมูลค่าการต่อรองจำแนกตามวิธีและเจ้าหน้าที่จัดซื้อ (หน่วย: บาท)</div>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="styled-table" id="pic-strategy-table">
+                <thead>
+                  <tr>
+                    <th>กลยุทธ์ด้านจัดซื้อ (Strategy)</th>
+                    <th>Pawina</th>
+                    <th>Tanida</th>
+                    <th>Yuwanit</th>
+                    <th>Dusit</th>
+                    <th>Saniya</th>
+                    <th>รวมมูลค่าทั้งหมด (บาท)</th>
+                    <th>สัดส่วน (% Share)</th>
+                  </tr>
+                </thead>
+                <tbody id="pic-strategy-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 6: จำลองตัวเลข (SIMULATORS) ================= -->
+        <section class="view-section" id="view-simulators">
+          <!-- Kaizen Simulator -->
+          <div class="calc-card-box">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">โปรแกรมคำนวณผลประหยัด Kaizen Cost Saving</div>
+                <div class="card-header-sub">เครื่องมือจำลองผลประหยัดเวลาการทำงานและต้นทุนการดำเนินงาน</div>
+              </div>
+              <span class="tier-tag tier-mid">ค่าแรงเฉลี่ยบริษัท: 117 บาท/ชม.</span>
+            </div>
+
+            <div class="calc-grid-layout">
+              <div>
+                <div class="form-field-group">
+                  <label for="sim-hourly-wage">ค่าแรงเฉลี่ยทั้งบริษัท (บาท/ชั่วโมง)</label>
+                  <input type="number" id="sim-hourly-wage" value="117" step="1">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-minutes-saved">ประหยัดเวลาได้ (นาที/งาน)</label>
+                  <input type="number" id="sim-minutes-saved" value="10" step="1">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-jobs-month">จำนวนงานที่ทำ (งาน/เดือน)</label>
+                  <input type="number" id="sim-jobs-month" value="16" step="1">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-months-year">จำนวนเดือนต่อปี (เดือน/ปี)</label>
+                  <input type="number" id="sim-months-year" value="1" step="1">
+                </div>
+              </div>
+
+              <div class="calc-result-display">
+                <div class="kpi-card-title">คิดเป็นผลประหยัดต่อปี</div>
+                <div class="calc-big-value" id="sim-kaizen-result">฿312.00</div>
+                <div class="calc-formula-tag" id="sim-kaizen-formula">
+                  (10 / 60) × 16 งาน × 117 บาท/ชม. × 1 เดือน
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Credit Terms Simulator -->
+          <div class="calc-card-box">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">โปรแกรมคำนวณผลประหยัดจากการขยายเครดิตเทอม</div>
+                <div class="card-header-sub">คำนวณผลประโยชน์ทางการเงินและลดต้นทุนทางบัญชีจากการยืดระยะเวลาชำระเงิน</div>
+              </div>
+              <span class="tier-tag tier-mid">อัตราดอกเบี้ย: 4.25% ต่อปี</span>
+            </div>
+
+            <div class="calc-grid-layout">
+              <div>
+                <div class="form-field-group">
+                  <label for="sim-credit-po">มูลค่าสั่งซื้อ (บาท)</label>
+                  <input type="number" id="sim-credit-po" value="3340000" step="10000">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-credit-orig">เงื่อนไขเครดิตเดิม (วัน)</label>
+                  <input type="number" id="sim-credit-orig" value="30" step="5">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-credit-new">เงื่อนไขเครดิตใหม่ (วัน)</label>
+                  <input type="number" id="sim-credit-new" value="60" step="5">
+                </div>
+                <div class="form-field-group">
+                  <label for="sim-credit-rate">อัตราดอกเบี้ยต่อปี (% ต่อปี)</label>
+                  <input type="number" id="sim-credit-rate" value="4.25" step="0.25">
+                </div>
+              </div>
+
+              <div class="calc-result-display">
+                <div class="kpi-card-title">ผลประหยัดลดต้นทุนทางบัญชี</div>
+                <div class="calc-big-value" id="sim-credit-result">฿11,829.17</div>
+                <div class="calc-formula-tag" id="sim-credit-formula">
+                  3,340,000 × (30 / 360) × 4.25%
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 7: จัดการข้อมูล (DATA IMPORT/EXPORT) ================= -->
+        <section class="view-section" id="view-data-import">
+          <!-- Google Sheets Live Sync Box -->
+          <div class="card-box" style="margin-bottom: 20px; border-color: rgba(16, 185, 129, 0.4);">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title" style="color: var(--accent-emerald);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  ซิงค์ข้อมูลสดจาก Google Sheets (Live Sync)
+                </div>
+                <div class="card-header-sub">เชื่อมต่อกับ Google Sheet เพื่อดึงข้อมูลรายการสั่งซื้อและส่วนลดล่าสุดอัตโนมัติ</div>
+              </div>
+              <span class="tier-tag tier-high" id="gsheet-status-badge">⚪ ยังไม่ได้เชื่อมต่อ</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+              <div class="form-field-group">
+                <label for="gsheet-url-input">Google Sheet URL หรือ Sheet ID <span style="color:var(--accent-emerald);">*</span></label>
+                <input type="text" id="gsheet-url-input" placeholder="วางลิงก์ Google Sheet ที่นี่ เช่น https://docs.google.com/spreadsheets/d/1aBcDeF.../edit">
+                <small style="color: var(--text-muted); font-size: 11px; margin-top: 3px; display: block;">
+                  💡 ระบบจะดาวน์โหลดและประมวลผล <b>ทุกแท็บชีตทั้งหมดอัตโนมัติ</b> (โปรดตั้งค่าแชร์เป็น "ทุกคนที่มีลิงก์มีสิทธิ์ดู")
+                </small>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <input type="checkbox" id="gsheet-auto-sync" checked style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="gsheet-auto-sync" style="font-size: 12px; color: var(--text-primary); cursor: pointer;">
+                  ซิงค์ข้อมูลสดอัตโนมัติทุกครั้งที่เปิดหน้านี้ (Auto Sync on Load)
+                </label>
+              </div>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px;">
+                <button class="btn-action btn-action-primary" id="btn-sync-gsheet" onclick="syncGoogleSheetNow()" style="background: var(--accent-emerald);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  บันทึกและซิงค์ข้อมูลสดเดี๋ยวนี้ (Sync Now)
+                </button>
+                <button class="btn-action btn-action-secondary" onclick="clearGoogleSheetSettings()">
+                  ล้างการตั้งค่า
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Excel Drag and Drop -->
+          <div class="card-box" style="margin-bottom: 20px;">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">อัปโหลดไฟล์ Excel (.xlsx) แบบออฟไลน์</div>
+                <div class="card-header-sub">ลากและวางไฟล์ข้อมูลชุดใหม่เพื่อประมวลผลบนแดชบอร์ดทันที (ประมวลผลในเครื่อง ปลอดภัย 100%)</div>
+              </div>
+            </div>
+
+            <div class="dropzone-container" id="excel-dropzone">
+              <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h4 style="font-size: 14px; font-weight: 600;">ลากและวางไฟล์ Excel (.xlsx) ที่นี่ หรือคลิกเพื่อเลือกไฟล์</h4>
+              <p style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">รองรับไฟล์ Excel มาตรฐาน KPI-Discount Supplier</p>
+            </div>
+          </div>
+
+          <!-- Target Rate Config Card -->
+          <div class="card-box" style="margin-bottom: 20px; border-color: rgba(245, 158, 11, 0.4);">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title" style="color: var(--accent-amber);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                  ตั้งค่าเป้าหมายการลดต้นทุน (KPI Target %)
+                </div>
+                <div class="card-header-sub">กำหนดอัตราเป้าหมายการประหยัดต้นทุน — ใช้กับ KPI Gauge, กราฟรายเดือน และ S-Curve ทั้งหมดทันที (ค่าเริ่มต้น 3.0%)</div>
+              </div>
+              <span class="tier-tag" id="target-rate-badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; border-color: rgba(245,158,11,0.3); font-weight: 700;">เป้าหมายปัจจุบัน: 3.0%</span>
+            </div>
+
+            <div style="display: flex; align-items: flex-end; gap: 14px; margin-top: 14px; flex-wrap: wrap;">
+              <div class="form-field-group" style="flex: 0 0 auto; margin: 0;">
+                <label for="target-rate-input" style="font-size: 12px; color: var(--text-muted);">อัตราเป้าหมาย (%)</label>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                  <input type="number" id="target-rate-input" min="0.1" max="100" step="0.1" value="3.0"
+                    style="width: 90px; padding: 8px 10px; font-size: 22px; font-weight: 700; color: var(--accent-amber); background: rgba(245,158,11,0.08); border: 1.5px solid rgba(245,158,11,0.4); border-radius: 8px; text-align: center; outline: none;">
+                  <span style="font-size: 20px; font-weight: 600; color: var(--text-muted);">%</span>
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="btn-action btn-action-primary" id="btn-set-target" onclick="setTargetRate()"
+                    style="background: linear-gradient(135deg, #d97706, #f59e0b); border: none; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    บันทึกเป้าหมาย
+                  </button>
+                  <button class="btn-action btn-action-secondary" onclick="document.getElementById('target-rate-input').value='3.0'; setTargetRate();">
+                    รีเซ็ตเป็น 3%
+                  </button>
+                </div>
+                <div id="target-rate-confirm" style="font-size: 11px; color: #10b981; opacity: 0; transition: opacity 0.4s; min-height: 16px;"></div>
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); align-self: center; max-width: 260px; line-height: 1.6;">
+                💡 เป้าหมายจะถูกจดจำในเครื่องและนำไปคำนวณ KPI ทุกส่วนทันที
+              </div>
+            </div>
+          </div>
+
+          <!-- Export Section -->
+          <div class="card-box">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">ส่งออกชุดข้อมูล (Export Data)</div>
+                <div class="card-header-sub">ดาวน์โหลดข้อมูลรายการสั่งซื้อและสถิติ KPI</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="btn-action btn-action-primary" onclick="exportFullTransactionsJSON()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ดาวน์โหลด JSON Dataset
+              </button>
+              <button class="btn-action btn-action-secondary" onclick="exportFullTransactionsCSV()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ดาวน์โหลด CSV รายการทั้งหมด
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- หน้าต่างรายละเอียด PO (Modal) -->
+  <div class="modal-overlay" id="tx-modal">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <h3 id="modal-tx-title">รายละเอียดรายการสั่งซื้อ</h3>
+        <button class="modal-close-btn" onclick="closeTxModal()">&times;</button>
+      </div>
+      <div class="modal-card-body" id="modal-tx-body"></div>
+    </div>
+  </div>
+
+  <!-- โหลดสคริปต์ -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

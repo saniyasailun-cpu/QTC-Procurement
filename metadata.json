@@ -1,0 +1,8 @@
+{
+  "name": "Remix Procurement KPI \u0026 Supplier Discount Management Engine",
+  "description": "Interactive dashboard for QTC ENERGY PCL to track procurement cost reduction KPIs, supplier negotiation discounts, credit extension savings, and team performance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
