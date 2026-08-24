@@ -224,10 +224,10 @@ function switchView(viewName) {
 
   setTimeout(() => {
     if (viewName === 'dashboard') {
-      State.charts.monthlyTrend?.resize();
-      State.charts.strategyDonut?.resize();
+      renderMonthlyTrendChart();
+      renderStrategyDonutChart(getActiveScopeTransactions());
     } else if (viewName === 'kpi-tracking') {
-      State.charts.multiYear?.resize();
+      renderMultiYearChart();
     }
   }, 60);
 
@@ -270,7 +270,8 @@ function getActiveScopeTransactions() {
 
 // คำนวณสรุปรายเดือนแบบไดนามิกสำหรับปีที่เลือก
 function getMonthlyAggregatedData() {
-  const yearTxs = (State.activeYear === 'ALL') 
+  const isAllYears = State.activeYear === 'ALL';
+  const yearTxs = isAllYears 
     ? State.transactions 
     : State.transactions.filter(t => t.year === State.activeYear);
 
@@ -280,33 +281,44 @@ function getMonthlyAggregatedData() {
   });
 
   yearTxs.forEach(t => {
-    const m = t.month || 'JAN';
+    const m = (t.month || 'JAN').toUpperCase();
     if (monthMap[m]) {
-      monthMap[m].purchase += t.totalPrice;
-      monthMap[m].savings += t.totalSaving;
+      monthMap[m].purchase += (Number(t.totalPrice) || 0);
+      monthMap[m].savings += (Number(t.totalSaving) || 0);
       monthMap[m].count += 1;
       if (t.strategy && t.strategy.includes('เครดิต')) {
-        monthMap[m].creditSaving += t.totalSaving;
+        monthMap[m].creditSaving += (Number(t.totalSaving) || 0);
       }
     }
   });
 
-  // ถ้าเป็นปี 2026 และมีข้อมูลเครดิตเทอมละเอียดใน monthlySummary ให้นำมาผสาน
+  // ถ้าเป็นปี 2026 ให้นำค่ามูลค่าจัดซื้อและผลประหยัดรวมอย่างเป็นทางการจาก monthlySummary มาใช้
   if (State.activeYear === '2026' && State.data?.monthlySummary) {
     State.data.monthlySummary.forEach(ms => {
-      if (monthMap[ms.month]) {
-        if (ms.creditSaving > 0) monthMap[ms.month].creditSaving = ms.creditSaving;
-        if (monthMap[ms.month].purchase === 0 && ms.pv2026 > 0) {
-          monthMap[ms.month].purchase = ms.pv2026;
-          monthMap[ms.month].savings = ms.cr2026;
+      const m = (ms.month || '').toUpperCase();
+      if (monthMap[m]) {
+        if (ms.creditSaving > 0) monthMap[m].creditSaving = ms.creditSaving;
+        if (ms.pv2026 > 0) {
+          monthMap[m].purchase = ms.pv2026;
         }
+        if (ms.cr2026 !== undefined && ms.cr2026 !== 0) {
+          monthMap[m].savings = ms.cr2026;
+        }
+      }
+    });
+  } else if (!isAllYears && State.data?.purchaseHistory) {
+    const phList = State.data.purchaseHistory.filter(ph => ph.year === State.activeYear);
+    phList.forEach(ph => {
+      const m = (ph.month || '').toUpperCase();
+      if (monthMap[m] && ph.purchaseValue > 0) {
+        monthMap[m].purchase = ph.purchaseValue;
       }
     });
   }
 
   return MONTH_ORDER.map(m => {
     const item = monthMap[m];
-    const rate = State.targetRate;
+    const rate = State.targetRate || 0.03;
     const target = item.purchase * rate;
     const actualRate = item.purchase > 0 ? (item.savings / item.purchase) : 0;
     const isPassed = actualRate >= rate;
@@ -460,8 +472,17 @@ function renderMonthlyTrendChart() {
   const ctx = document.getElementById('monthlyTrendChart')?.getContext('2d');
   if (!ctx) return;
 
-  const monthlyAgg = getMonthlyAggregatedData();
-  const monthLabelsThai = MONTH_ORDER.map(m => THAI_MONTHS_SHORT[m]);
+  const rawMonthlyAgg = getMonthlyAggregatedData();
+  const isQuarterFiltered = State.activeQuarter !== 'ALL';
+  const targetMonths = isQuarterFiltered 
+    ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER)
+    : MONTH_ORDER;
+
+  const monthlyAgg = isQuarterFiltered 
+    ? rawMonthlyAgg.filter(r => targetMonths.includes(r.month))
+    : rawMonthlyAgg;
+
+  const monthLabelsThai = monthlyAgg.map(r => THAI_MONTHS_SHORT[r.month] || r.month);
 
   if (State.charts.monthlyTrend) {
     State.charts.monthlyTrend.destroy();
@@ -469,7 +490,7 @@ function renderMonthlyTrendChart() {
 
   const isDark = State.theme === 'dark';
   const textColor = isDark ? '#94a3b8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
 
   if (State.chartMode === 'bar') {
     const purchaseValuesMB = monthlyAgg.map(r => (r.pv > 0 ? Number((r.pv / 1000000).toFixed(2)) : null));
@@ -480,6 +501,9 @@ function renderMonthlyTrendChart() {
     const targetSavingsMB = monthlyAgg.map(r => (r.pv > 0 ? Number((r.target / 1000000).toFixed(2)) : null));
     const rawCostReduction = monthlyAgg.map(r => Number((r.cr / 1000000).toFixed(2)));
 
+    const validSavings = costReductionMB.filter(v => v !== null);
+    const minSaving = validSavings.length > 0 ? Math.min(...validSavings) : 0;
+
     State.charts.monthlyTrend = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -489,8 +513,8 @@ function renderMonthlyTrendChart() {
             type: 'bar',
             label: 'มูลค่าสั่งซื้อ (ล้านบาท)',
             data: purchaseValuesMB,
-            backgroundColor: 'rgba(2, 132, 199, 0.28)',
-            borderColor: '#0284c7',
+            backgroundColor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.18)',
+            borderColor: isDark ? '#38bdf8' : '#0284c7',
             borderWidth: 1.5,
             borderRadius: 6,
             yAxisID: 'y',
@@ -501,11 +525,13 @@ function renderMonthlyTrendChart() {
             label: 'มูลค่าต่อรองได้จริง (ล้านบาท)',
             data: costReductionMB,
             borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
             borderWidth: 3,
-            pointRadius: 4.5,
-            pointHoverRadius: 6.5,
+            pointRadius: costReductionMB.map(val => val === null ? 0 : 5),
+            pointHoverRadius: 7,
             pointBackgroundColor: costReductionMB.map(val => (val !== null && val < 0) ? '#f43f5e' : '#10b981'),
+            pointBorderColor: isDark ? '#0f172a' : '#ffffff',
+            pointBorderWidth: 1.5,
             tension: 0.25,
             spanGaps: false,
             yAxisID: 'y1',
@@ -513,12 +539,12 @@ function renderMonthlyTrendChart() {
           },
           {
             type: 'line',
-            label: 'เป้าหมาย 3% (ล้านบาท)',
+            label: `เป้าหมาย ${(State.targetRate * 100).toFixed(1)}% (ล้านบาท)`,
             data: targetSavingsMB,
             borderColor: '#f59e0b',
             borderWidth: 2,
             borderDash: [5, 5],
-            pointRadius: 3.5,
+            pointRadius: targetSavingsMB.map(val => val === null ? 0 : 3.5),
             pointBackgroundColor: '#f59e0b',
             spanGaps: false,
             yAxisID: 'y1',
@@ -531,43 +557,77 @@ function renderMonthlyTrendChart() {
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { labels: { color: textColor, font: { family: 'Prompt', size: 11 }, boxWidth: 12 } },
+          legend: {
+            position: 'top',
+            labels: {
+              color: textColor,
+              font: { family: 'Prompt', size: 11, weight: '500' },
+              boxWidth: 14,
+              padding: 12
+            }
+          },
           tooltip: {
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#334155',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            padding: 12,
             callbacks: {
+              title: (items) => {
+                const idx = items[0]?.dataIndex;
+                const m = monthlyAgg[idx]?.month;
+                return `${THAI_MONTHS[m] || m} (${State.activeYear === 'ALL' ? 'ทุกปี' : State.activeYear})`;
+              },
               label: (c) => {
                 const idx = c.dataIndex;
                 if (c.dataset.label.includes('ต่อรองได้')) {
                   const rawVal = rawCostReduction[idx];
-                  if (rawVal < 0) return `มูลค่าต่อรองได้จริง: ปรับปรุงรายการ -฿${Math.abs(rawVal)} ล้านบาท`;
-                  if (purchaseValuesMB[idx] === null && rawVal === 0) return `มูลค่าต่อรองได้จริง: ยังไม่มีข้อมูล`;
-                  return `มูลค่าต่อรองได้จริง: ฿${rawVal} ล้านบาท`;
+                  if (rawVal < 0) return ` มูลค่าต่อรองได้จริง: ปรับปรุงรายการ -฿${Math.abs(rawVal)} ล้านบาท`;
+                  if (purchaseValuesMB[idx] === null && rawVal === 0) return ` มูลค่าต่อรองได้จริง: ยังไม่มีข้อมูล`;
+                  return ` มูลค่าต่อรองได้จริง: ฿${rawVal} ล้านบาท`;
                 }
-                if (c.raw === null || c.raw === undefined) return `${c.dataset.label}: ยังไม่มีข้อมูล`;
-                return `${c.dataset.label}: ฿${c.raw} ล้านบาท`;
+                if (c.raw === null || c.raw === undefined) return ` ${c.dataset.label}: ยังไม่มีข้อมูล`;
+                return ` ${c.dataset.label}: ฿${c.raw} ล้านบาท`;
               }
             }
           }
         },
         scales: {
           x: {
-            ticks: { color: textColor, font: { family: 'Prompt' } },
+            ticks: { color: textColor, font: { family: 'Prompt', size: 11 } },
             grid: { display: false }
           },
           y: {
             type: 'linear',
             position: 'left',
-            beginAtZero: true,
-            min: 0,
-            title: { display: true, text: 'มูลค่าสั่งซื้อ (ล้านบาท)', color: textColor, font: { family: 'Prompt', size: 11 } },
-            ticks: { color: textColor },
+            suggestedMin: 0,
+            title: {
+              display: true,
+              text: 'มูลค่าสั่งซื้อ (ล้านบาท)',
+              color: textColor,
+              font: { family: 'Prompt', size: 11, weight: '600' }
+            },
+            ticks: {
+              color: textColor,
+              callback: (val) => `${val}M`
+            },
             grid: { color: gridColor }
           },
           y1: {
             type: 'linear',
             position: 'right',
-            beginAtZero: true,
-            title: { display: true, text: 'ต่อรองได้ / เป้าหมาย 3% (ล้านบาท)', color: textColor, font: { family: 'Prompt', size: 11 } },
-            ticks: { color: textColor },
+            suggestedMin: minSaving < 0 ? minSaving * 1.3 : 0,
+            title: {
+              display: true,
+              text: `ต่อรองได้ / เป้าหมาย ${(State.targetRate * 100).toFixed(1)}% (ล้านบาท)`,
+              color: textColor,
+              font: { family: 'Prompt', size: 11, weight: '600' }
+            },
+            ticks: {
+              color: textColor,
+              callback: (val) => `${val}M`
+            },
             grid: { display: false }
           }
         }
@@ -577,14 +637,31 @@ function renderMonthlyTrendChart() {
   } else {
     let cumActual = 0;
     let cumTarget = 0;
+    let lastActiveIndex = -1;
+
+    monthlyAgg.forEach((r, idx) => {
+      if (r.pv > 0 || r.cr !== 0) {
+        lastActiveIndex = idx;
+      }
+    });
+
     const actualCumulative = [];
     const targetCumulative = [];
 
-    monthlyAgg.forEach(r => {
-      cumActual += r.cr;
-      cumTarget += r.target;
-      actualCumulative.push(Number((cumActual / 1000000).toFixed(2)));
-      targetCumulative.push(Number((cumTarget / 1000000).toFixed(2)));
+    monthlyAgg.forEach((r, idx) => {
+      if (idx <= lastActiveIndex) {
+        cumActual += r.cr;
+        actualCumulative.push(Number((cumActual / 1000000).toFixed(2)));
+      } else {
+        actualCumulative.push(null);
+      }
+
+      if (r.pv > 0 || idx <= lastActiveIndex) {
+        cumTarget += r.target;
+        targetCumulative.push(Number((cumTarget / 1000000).toFixed(2)));
+      } else {
+        targetCumulative.push(null);
+      }
     });
 
     State.charts.monthlyTrend = new Chart(ctx, {
@@ -600,17 +677,23 @@ function renderMonthlyTrendChart() {
             fill: true,
             tension: 0.35,
             borderWidth: 2.5,
-            pointRadius: 4,
-            pointBackgroundColor: '#10b981'
+            pointRadius: actualCumulative.map(val => val === null ? 0 : 5),
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#10b981',
+            pointBorderColor: isDark ? '#0f172a' : '#ffffff',
+            pointBorderWidth: 1.5,
+            spanGaps: false
           },
           {
-            label: 'เป้าหมายสะสม 3.0% (ล้านบาท)',
+            label: `เป้าหมายสะสม ${(State.targetRate * 100).toFixed(1)}% (ล้านบาท)`,
             data: targetCumulative,
             borderColor: '#f59e0b',
             borderWidth: 2,
             borderDash: [5, 5],
-            pointRadius: 3,
-            fill: false
+            pointRadius: targetCumulative.map(val => val === null ? 0 : 3.5),
+            pointBackgroundColor: '#f59e0b',
+            fill: false,
+            spanGaps: false
           }
         ]
       },
@@ -619,14 +702,52 @@ function renderMonthlyTrendChart() {
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { labels: { color: textColor, font: { family: 'Prompt', size: 11 }, boxWidth: 12 } },
-          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ฿${c.raw} ล้านบาท` } }
+          legend: {
+            position: 'top',
+            labels: {
+              color: textColor,
+              font: { family: 'Prompt', size: 11, weight: '500' },
+              boxWidth: 14,
+              padding: 12
+            }
+          },
+          tooltip: {
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#334155',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            padding: 12,
+            callbacks: {
+              title: (items) => {
+                const idx = items[0]?.dataIndex;
+                const m = monthlyAgg[idx]?.month;
+                return `${THAI_MONTHS[m] || m} (${State.activeYear === 'ALL' ? 'ทุกปี' : State.activeYear})`;
+              },
+              label: (c) => {
+                if (c.raw === null || c.raw === undefined) return ` ${c.dataset.label}: ยังไม่มีข้อมูล`;
+                return ` ${c.dataset.label}: ฿${c.raw} ล้านบาท`;
+              }
+            }
+          }
         },
         scales: {
-          x: { ticks: { color: textColor, font: { family: 'Prompt' } }, grid: { color: gridColor } },
+          x: {
+            ticks: { color: textColor, font: { family: 'Prompt', size: 11 } },
+            grid: { color: gridColor }
+          },
           y: {
-            title: { display: true, text: 'มูลค่าสะสม (ล้านบาท)', color: textColor, font: { family: 'Prompt', size: 11 } },
-            ticks: { color: textColor }, grid: { color: gridColor }
+            title: {
+              display: true,
+              text: 'มูลค่าสะสม (ล้านบาท)',
+              color: textColor,
+              font: { family: 'Prompt', size: 11, weight: '600' }
+            },
+            ticks: {
+              color: textColor,
+              callback: (val) => `${val}M`
+            },
+            grid: { color: gridColor }
           }
         }
       }
@@ -869,15 +990,39 @@ function renderMultiYearChart() {
   const ctx = document.getElementById('multiYearChart')?.getContext('2d');
   if (!ctx) return;
 
-  const yearly = State.data?.yearlySummary || [
-    { year: '2023', purchaseValue: 0, costSaving: 12809342.14 },
-    { year: '2024', purchaseValue: 193845782.42, costSaving: 19695501.68 },
-    { year: '2025', purchaseValue: 1573084681.49, costSaving: 38838937.04 },
-    { year: '2026', purchaseValue: 645209533.19, costSaving: 25785570.12 }
-  ];
+  const years = ['2023', '2024', '2025', '2026'];
+  const multiYearData = years.map(yr => {
+    const txs = State.transactions.filter(t => t.year === yr);
+    let saving = txs.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
+    
+    let purchase = 0;
+    if (yr === '2026' && State.data?.monthlySummary) {
+      purchase = State.data.monthlySummary.reduce((sum, m) => sum + (Number(m.pv2026) || 0), 0);
+    } else if (State.data?.purchaseHistory) {
+      const phs = State.data.purchaseHistory.filter(p => p.year === yr);
+      purchase = phs.reduce((sum, p) => sum + (Number(p.purchaseValue) || 0), 0);
+    }
+    if (purchase === 0) {
+      purchase = txs.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+    }
+    
+    const ys = State.data?.yearlySummary?.find(y => y.year === yr);
+    if (ys) {
+      if (saving === 0 && ys.costSaving > 0) saving = ys.costSaving;
+      if (purchase === 0 && ys.purchaseValue > 0) purchase = ys.purchaseValue;
+    }
 
-  const labels = yearly.map(y => `ปี ${y.year}`);
-  const savingsMB = yearly.map(y => Number((y.costSaving / 1000000).toFixed(2)));
+    return {
+      year: yr,
+      purchaseMB: Number((purchase / 1000000).toFixed(2)),
+      savingMB: Number((saving / 1000000).toFixed(2)),
+      pct: purchase > 0 ? ((saving / purchase) * 100).toFixed(2) : '0.00'
+    };
+  });
+
+  const labels = multiYearData.map(y => `ปี ${y.year}`);
+  const purchaseValues = multiYearData.map(y => y.purchaseMB);
+  const savingsValues = multiYearData.map(y => y.savingMB);
 
   if (State.charts.multiYear) {
     State.charts.multiYear.destroy();
@@ -885,34 +1030,114 @@ function renderMultiYearChart() {
 
   const isDark = State.theme === 'dark';
   const textColor = isDark ? '#94a3b8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
 
   State.charts.multiYear = new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: labels,
-      datasets: [{
-        label: 'มูลค่าผลประหยัดต้นทุน (ล้านบาท)',
-        data: savingsMB,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-        fill: true,
-        tension: 0.35,
-        borderWidth: 2.5,
-        pointRadius: 4,
-        pointBackgroundColor: '#10b981'
-      }]
+      datasets: [
+        {
+          type: 'bar',
+          label: 'มูลค่าการสั่งซื้อรวม (ล้านบาท)',
+          data: purchaseValues,
+          backgroundColor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.18)',
+          borderColor: isDark ? '#38bdf8' : '#0284c7',
+          borderWidth: 1.5,
+          borderRadius: 8,
+          yAxisID: 'y',
+          order: 2
+        },
+        {
+          type: 'line',
+          label: 'มูลค่าผลประหยัดต้นทุน (ล้านบาท)',
+          data: savingsValues,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 3,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          pointBackgroundColor: '#10b981',
+          pointBorderColor: isDark ? '#0f172a' : '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y1',
+          order: 1
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: textColor, font: { family: 'Prompt', size: 11 } } },
-        tooltip: { callbacks: { label: (c) => `ยอดลดต้นทุน: ฿${c.raw} ล้านบาท` } }
+        legend: {
+          position: 'top',
+          labels: {
+            color: textColor,
+            font: { family: 'Prompt', size: 12, weight: '500' },
+            boxWidth: 14,
+            padding: 15
+          }
+        },
+        tooltip: {
+          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: isDark ? '#f8fafc' : '#0f172a',
+          bodyColor: isDark ? '#cbd5e1' : '#334155',
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+          borderWidth: 1,
+          padding: 12,
+          callbacks: {
+            afterBody: (items) => {
+              const idx = items[0]?.dataIndex;
+              const item = multiYearData[idx];
+              if (item) {
+                return `อัตราการประหยัด: ${item.pct}% ของยอดจัดซื้อ`;
+              }
+              return '';
+            },
+            label: (c) => ` ${c.dataset.label}: ฿${c.raw} ล้านบาท`
+          }
+        }
       },
       scales: {
-        x: { ticks: { color: textColor, font: { family: 'Prompt' } }, grid: { color: gridColor } },
-        y: { ticks: { color: textColor }, grid: { color: gridColor }, title: { display: true, text: 'ล้านบาท', color: textColor } }
+        x: {
+          ticks: { color: textColor, font: { family: 'Prompt', size: 12, weight: '600' } },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'มูลค่าสั่งซื้อ (ล้านบาท)',
+            color: textColor,
+            font: { family: 'Prompt', size: 11, weight: '600' }
+          },
+          ticks: {
+            color: textColor,
+            callback: (val) => `${val}M`
+          },
+          grid: { color: gridColor }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'ผลประหยัดต้นทุน (ล้านบาท)',
+            color: textColor,
+            font: { family: 'Prompt', size: 11, weight: '600' }
+          },
+          ticks: {
+            color: textColor,
+            callback: (val) => `${val}M`
+          },
+          grid: { display: false }
+        }
       }
     }
   });
