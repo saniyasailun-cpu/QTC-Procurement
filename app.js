@@ -13,7 +13,14 @@ const State = {
   activeView: 'dashboard',
   chartMode: 'bar', // 'bar' | 'curve'
   theme: localStorage.getItem('app-theme') || 'dark',
-  targetRate: parseFloat(localStorage.getItem('qtc_target_rate') || '3.0') / 100,
+  targetRate: (() => {
+    const raw = localStorage.getItem('qtc_target_rate');
+    if (!raw) return 0.03;
+    let n = parseFloat(raw);
+    if (isNaN(n) || n <= 0) return 0.03;
+    if (n > 0 && n <= 0.1) n = n * 100; // แปลงกรณีใส่ 0.03 ให้เป็น 3.0%
+    return (n >= 0.1 && n <= 100) ? n / 100 : 0.03;
+  })(),
   
   // รายการเป้าหมายเชิงกลยุทธ์ (Strategic Goals)
   goals: [],
@@ -89,14 +96,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // โหลดเป้าหมายที่บันทึกไว้
   const savedRate = localStorage.getItem('qtc_target_rate');
   const rateInput = document.getElementById('target-rate-input');
+  let currentVal = 3.0;
   if (savedRate) {
-    const parsed = parseFloat(savedRate);
+    let parsed = parseFloat(savedRate);
     if (!isNaN(parsed) && parsed > 0) {
-      State.targetRate = parsed / 100;
-      if (rateInput) rateInput.value = savedRate;
-      updateTargetBadge(parsed);
+      if (parsed > 0 && parsed <= 0.1) parsed = parsed * 100;
+      if (parsed >= 0.1 && parsed <= 100) currentVal = parsed;
     }
   }
+  State.targetRate = currentVal / 100;
+  if (rateInput) rateInput.value = currentVal.toFixed(1);
+  updateTargetBadge(currentVal);
 
   initTheme();
   initGoals();
@@ -2193,10 +2203,16 @@ window.setTargetRate = function() {
   const input = document.getElementById('target-rate-input');
   if (!input) return;
 
-  const val = parseFloat(input.value);
+  let val = parseFloat(input.value);
   if (isNaN(val) || val <= 0 || val > 100) {
-    alert('กรุณากรอกเป้าหมายระหว่าง 0.1% ถึง 100%');
+    alert('กรุณากรอกเป้าหมายระหว่าง 0.1% ถึง 100% เช่น 3 หรือ 3.0');
     return;
+  }
+
+  // หากผู้ใช้เผลอกรอกเป็นทศนิยม เช่น 0.03 ให้ปรับเป็น 3% โดยอัตโนมัติ
+  if (val > 0 && val <= 0.1) {
+    val = val * 100;
+    input.value = val.toFixed(1);
   }
 
   State.targetRate = val / 100;
