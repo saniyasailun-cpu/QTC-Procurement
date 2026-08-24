@@ -86,6 +86,18 @@ const THAI_STRATEGIES = {
 
 // เริ่มต้นการทำงานเมื่อโหลดหน้าเสร็จ
 document.addEventListener('DOMContentLoaded', () => {
+  // โหลดเป้าหมายที่บันทึกไว้
+  const savedRate = localStorage.getItem('qtc_target_rate');
+  const rateInput = document.getElementById('target-rate-input');
+  if (savedRate) {
+    const parsed = parseFloat(savedRate);
+    if (!isNaN(parsed) && parsed > 0) {
+      State.targetRate = parsed / 100;
+      if (rateInput) rateInput.value = savedRate;
+      updateTargetBadge(parsed);
+    }
+  }
+
   initTheme();
   initGoals();
   loadData();
@@ -96,14 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initSimulators();
   initDropzone();
   initGoogleSheetSync();
-
-  // โหลดเป้าหมายที่บันทึกไว้
-  const savedRate = localStorage.getItem('qtc_target_rate');
-  const rateInput = document.getElementById('target-rate-input');
-  if (rateInput && savedRate) {
-    rateInput.value = savedRate;
-    updateTargetBadge(parseFloat(savedRate));
-  }
 
   // ปิด Modal ด้วยปุ่ม ESC
   document.addEventListener('keydown', (e) => {
@@ -2141,19 +2145,6 @@ window.clearGoogleSheetSettings = function() {
     alert('ล้างการตั้งค่าเรียบร้อยแล้ว');
   }
 };
-
-// เพิ่มการเรียก initGoogleSheetSync ตอนเริ่มทำงาน
-document.addEventListener('DOMContentLoaded', () => {
-  initGoogleSheetSync();
-
-  // โหลดเป้าหมายที่บันทึกไว้
-  const savedRate = localStorage.getItem('qtc_target_rate');
-  const rateInput = document.getElementById('target-rate-input');
-  if (rateInput && savedRate) {
-    rateInput.value = savedRate;
-    updateTargetBadge(parseFloat(savedRate));
-  }
-});
 
 // ฟังก์ชันตั้งค่าเป้าหมาย KPI %
 window.setTargetRate = function() {
