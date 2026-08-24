@@ -51,6 +51,13 @@ const State = {
 // ข้อมูลเดือนและไตรมาส
 const MONTH_ORDER = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
+// การตั้งค่าความสมูทของ Chart.js ทั่วทั้งระบบ (Low Cortisol Smooth Transitions)
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.animation.duration = 750;
+  Chart.defaults.animation.easing = 'easeOutQuart';
+  Chart.defaults.elements.line.tension = 0.35;
+}
+
 const QUARTER_MONTHS = {
   'Q1': ['JAN', 'FEB', 'MAR'],
   'Q2': ['APR', 'MAY', 'JUN'],
@@ -410,21 +417,26 @@ function animateValue(id, endValue, isCurrency = true, decimals = 2) {
   const el = document.getElementById(id);
   if (!el) return;
   
-  const duration = 500;
-  const start = 0;
+  const rawPrev = el.dataset.currVal;
+  const start = rawPrev !== undefined ? (parseFloat(rawPrev) || 0) : 0;
+  el.dataset.currVal = String(endValue);
+
+  const duration = 650;
   const startTime = performance.now();
 
   function update(currentTime) {
     const elapsed = currentTime - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    const easeProgress = 1 - (1 - progress) * (1 - progress);
+    // Cubic Out Easing curve for luxurious and low-cortisol smooth counting
+    const easeProgress = 1 - Math.pow(1 - progress, 3);
     const currentVal = start + (endValue - start) * easeProgress;
 
     if (isCurrency) el.textContent = formatCurrency(currentVal, decimals);
     else el.textContent = (currentVal * 100).toFixed(decimals) + '%';
 
-    if (progress < 1) requestAnimationFrame(update);
-    else {
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
       if (isCurrency) el.textContent = formatCurrency(endValue, decimals);
       else el.textContent = (endValue * 100).toFixed(decimals) + '%';
     }
