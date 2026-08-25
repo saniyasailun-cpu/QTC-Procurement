@@ -523,11 +523,217 @@ function renderExecutiveDashboard() {
 
   document.getElementById('kpi-credit-savings').textContent = formatCurrency(totalCreditSavings);
 
+  renderQuickInsight();
   renderMonthlyTrendChart();
   renderStrategyDonutChart(scopedTxs);
   renderCompactPICList(scopedTxs);
   renderCompactTopSuppliers(scopedTxs);
 }
+
+// -------------------------------------------------------------
+// Quick Insight Analytical Engine (สรุปวิเคราะห์ด่วนอัจฉริยะตามข้อมูลจริง 100%)
+// -------------------------------------------------------------
+function renderQuickInsight(isManualTrigger = false) {
+  const insightBox = document.getElementById('quick-insight-box');
+  const scopeEl = document.getElementById('quick-insight-scope');
+  const summaryEl = document.getElementById('quick-insight-summary');
+  const chipsEl = document.getElementById('quick-insight-chips');
+  const refreshBtn = document.querySelector('.quick-insight-refresh-btn');
+  if (!insightBox || !summaryEl) return;
+
+  if (isManualTrigger && refreshBtn) {
+    refreshBtn.classList.add('rotating');
+    setTimeout(() => refreshBtn.classList.remove('rotating'), 600);
+    summaryEl.style.opacity = '0.3';
+    setTimeout(() => { summaryEl.style.opacity = '1'; }, 150);
+  }
+
+  const activeYear = State.activeYear;
+  const activeQuarter = State.activeQuarter;
+  const scopedTxs = getActiveScopeTransactions();
+  const monthlyAgg = getMonthlyAggregatedData();
+  const targetRate = State.targetRate || 0.03;
+
+  const isQuarterFiltered = activeQuarter !== 'ALL';
+  const targetMonths = isQuarterFiltered 
+    ? (QUARTER_MONTHS[activeQuarter] || MONTH_ORDER)
+    : MONTH_ORDER;
+
+  const scopedMonthly = isQuarterFiltered
+    ? monthlyAgg.filter(r => targetMonths.includes(r.month))
+    : monthlyAgg;
+
+  // คำนวณยอดจัดซื้อและยอดประหยัดที่ตรงกับ Executive Dashboard 100%
+  let totalPurchase = scopedMonthly.reduce((sum, r) => sum + (r.pv || 0), 0);
+  let totalSavings = scopedMonthly.reduce((sum, r) => sum + (r.cr || 0), 0);
+
+  if (totalPurchase === 0 && scopedTxs.length > 0) {
+    scopedTxs.forEach(t => {
+      totalPurchase += (t.totalPrice || 0);
+      totalSavings += (t.totalSaving || 0);
+    });
+  }
+
+  const savingRate = totalPurchase > 0 ? (totalSavings / totalPurchase) : 0;
+  const isMet = savingRate >= targetRate;
+  const rateDeltaPct = ((savingRate - targetRate) * 100).toFixed(2);
+  const savingMB = (totalSavings / 1000000).toFixed(2);
+  const purchaseMB = (totalPurchase / 1000000).toFixed(2);
+
+  // ป้ายกำกับขอบเขตข้อมูล
+  let scopeText = activeYear === 'ALL' ? 'ภาพรวมทุกปี' : formatYearBE(activeYear);
+  if (activeQuarter !== 'ALL') scopeText += ` • ไตรมาส ${activeQuarter}`;
+  if (scopeEl) scopeEl.textContent = scopeText;
+
+  // วิเคราะห์ผลงานรายไตรมาส
+  const qStats = {
+    Q1: { pv: 0, cr: 0, name: 'Q1' },
+    Q2: { pv: 0, cr: 0, name: 'Q2' },
+    Q3: { pv: 0, cr: 0, name: 'Q3' },
+    Q4: { pv: 0, cr: 0, name: 'Q4' }
+  };
+
+  monthlyAgg.forEach(m => {
+    let qKey = 'Q1';
+    if (['APR', 'MAY', 'JUN'].includes(m.month)) qKey = 'Q2';
+    else if (['JUL', 'AUG', 'SEP'].includes(m.month)) qKey = 'Q3';
+    else if (['OCT', 'NOV', 'DEC'].includes(m.month)) qKey = 'Q4';
+
+    qStats[qKey].pv += (m.pv || 0);
+    qStats[qKey].cr += (m.cr || 0);
+  });
+
+  const validQuarters = Object.values(qStats)
+    .filter(q => q.pv > 0)
+    .map(q => ({
+      ...q,
+      rate: q.cr / q.pv,
+      ratePct: ((q.cr / q.pv) * 100).toFixed(2),
+      savingMB: (q.cr / 1000000).toFixed(2)
+    }))
+    .sort((a, b) => b.rate - a.rate);
+
+  const topQuarter = validQuarters[0] || null;
+
+  // วิเคราะห์เดือนที่ทำผลงานลดต้นทุนสูงสุด
+  const validMonths = scopedMonthly
+    .filter(m => m.pv > 0 && m.cr > 0)
+    .map(m => ({
+      ...m,
+      ratePct: ((m.cr / m.pv) * 100).toFixed(2),
+      savingMB: (m.cr / 1000000).toFixed(2),
+      nameTH: THAI_MONTHS_SHORT[m.month] || m.month
+    }))
+    .sort((a, b) => (b.cr / b.pv) - (a.cr / a.pv));
+
+  const topMonth = validMonths[0] || null;
+
+  // วิเคราะห์กลยุทธ์หลักจากรายการสั่งซื้อจริง
+  const strategyMap = {};
+  let totalStrategySaving = 0;
+  scopedTxs.forEach(t => {
+    const strat = (t.strategy || 'Negotiate').trim();
+    if (!strategyMap[strat]) strategyMap[strat] = { cr: 0, pv: 0, count: 0 };
+    strategyMap[strat].cr += (t.totalSaving || 0);
+    strategyMap[strat].pv += (t.totalPrice || 0);
+    strategyMap[strat].count += 1;
+    totalStrategySaving += (t.totalSaving || 0);
+  });
+
+  const sortedStrategies = Object.entries(strategyMap)
+    .map(([name, val]) => ({
+      name,
+      ...val,
+      pctOfTotal: totalStrategySaving > 0 ? (val.cr / totalStrategySaving) : 0,
+      savingMB: (val.cr / 1000000).toFixed(2)
+    }))
+    .sort((a, b) => b.cr - a.cr);
+
+  const topStrategy = sortedStrategies[0] || null;
+
+  // วิเคราะห์ผู้รับผิดชอบหลัก
+  const picMap = {};
+  scopedTxs.forEach(t => {
+    const p = (t.pic || 'ไม่ระบุ').trim();
+    if (!picMap[p]) picMap[p] = { cr: 0, count: 0 };
+    picMap[p].cr += (t.totalSaving || 0);
+    picMap[p].count += 1;
+  });
+
+  const topPIC = Object.entries(picMap)
+    .filter(([p]) => p !== 'ไม่ระบุ')
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.cr - a.cr)[0] || null;
+
+  // สังเคราะห์ข้อความเชิงลึกที่แม่นยำตามข้อมูลจริง 100%
+  let insightText = '';
+  const currentRateStr = (savingRate * 100).toFixed(2);
+  const targetRateStr = (targetRate * 100).toFixed(1);
+
+  if (isQuarterFiltered) {
+    const stratNote = topStrategy ? ` ขับเคลื่อนหลักโดยกลยุทธ์ <em>"${topStrategy.name}"</em> (${(topStrategy.pctOfTotal * 100).toFixed(0)}%)` : '';
+    if (isMet) {
+      insightText = `ไตรมาส <strong>${activeQuarter}</strong> ทะลุเป้า KPI: อัตราลดต้นทุนแตะ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M จากยอดซื้อ ฿${purchaseMB}M)${stratNote}`;
+    } else {
+      insightText = `ไตรมาส <strong>${activeQuarter}</strong> อัตราลดต้นทุนอยู่ที่ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M ขาดอีก ${Math.abs(Number(rateDeltaPct))}% สู่เป้า ${targetRateStr}%)${stratNote}`;
+    }
+  } else if (topQuarter && topQuarter.rate > targetRate && topStrategy) {
+    insightText = `ผลงานเด่นใน <strong>${topQuarter.name}</strong> อัตราลดต้นทุนสูงถึง <span class="highlight-metric">${topQuarter.ratePct}%</span> (ประหยัด ฿${topQuarter.savingMB}M) กลยุทธ์หลัก <em>"${topStrategy.name}"</em> ทำได้ ฿${topStrategy.savingMB}M (${(topStrategy.pctOfTotal * 100).toFixed(0)}% ของยอดรวม)`;
+  } else if (isMet) {
+    insightText = `ภาพรวมทำได้ตามเป้าหมาย: อัตราลดต้นทุนจริง <span class="highlight-metric">${currentRateStr}%</span> (<span class="highlight-metric">+${rateDeltaPct}%</span> เหนือเป้าหมาย KPI ${targetRateStr}%) ยอดประหยัดรวม ฿${savingMB} ล้านบาท`;
+  } else {
+    insightText = `อัตราลดต้นทุนรวมอยู่ที่ <span class="highlight-metric">${currentRateStr}%</span> จากยอดซื้อ ฿${purchaseMB}M (ต่ำกว่าเป้าหมาย KPI ${targetRateStr}% อยู่ ${Math.abs(Number(rateDeltaPct))}%) `;
+  }
+
+  // สร้างป้ายข้อมูลประกอบ (Chips)
+  const chips = [];
+
+  if (topQuarter && !isQuarterFiltered) {
+    chips.push(`
+      <span class="insight-chip chip-orange" title="ไตรมาสที่มีอัตราการลดต้นทุนสูงสุด">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <strong>${topQuarter.name}: ${topQuarter.ratePct}%</strong>
+      </span>
+    `);
+  } else if (topMonth) {
+    chips.push(`
+      <span class="insight-chip chip-orange" title="เดือนที่ทำผลงานได้สูงสุดในรอบนี้">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <strong>Top: ${topMonth.nameTH} (${topMonth.ratePct}%)</strong>
+      </span>
+    `);
+  }
+
+  if (topStrategy) {
+    chips.push(`
+      <span class="insight-chip chip-accent" title="กลยุทธ์ที่สร้างผลประหยัดสูงสุด">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        <strong>${topStrategy.name}</strong> (${(topStrategy.pctOfTotal * 100).toFixed(0)}%)
+      </span>
+    `);
+  }
+
+  if (topPIC) {
+    chips.push(`
+      <span class="insight-chip" title="ผู้รับผิดชอบที่ทำผลงานลดต้นทุนสูงสุด">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <strong>${topPIC.name}</strong> (฿${(topPIC.cr / 1000000).toFixed(2)}M)
+      </span>
+    `);
+  }
+
+  chips.push(`
+    <span class="insight-chip ${isMet ? 'chip-positive' : ''}" title="สถานะเทียบเป้าหมาย KPI">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <strong>${isMet ? '+' : ''}${rateDeltaPct}%</strong> vs KPI
+    </span>
+  `);
+
+  summaryEl.innerHTML = insightText;
+  if (chipsEl) chipsEl.innerHTML = chips.join('');
+}
+
+window.renderQuickInsight = renderQuickInsight;
 
 window.setChartMode = function(mode) {
   State.chartMode = mode;

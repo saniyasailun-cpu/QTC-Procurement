@@ -433,6 +433,190 @@ html, body {
 }
 
 /* ==========================================================================
+   กล่องสรุปวิเคราะห์ด่วนอัจฉริยะ (Compact Quick Insight Bar)
+   ========================================================================== */
+.quick-insight-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  background-image: linear-gradient(90deg, rgba(241, 90, 41, 0.07) 0%, rgba(2, 132, 199, 0.04) 60%, rgba(16, 185, 129, 0.05) 100%);
+  border: 1px solid rgba(241, 90, 41, 0.2);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-fast);
+  animation: cardStaggerIn 0.3s var(--ease-gentle) backwards;
+  min-height: 38px;
+}
+
+[data-theme="light"] .quick-insight-banner {
+  background: #ffffff;
+  background-image: linear-gradient(90deg, rgba(241, 90, 41, 0.06) 0%, rgba(2, 132, 199, 0.03) 60%, rgba(16, 185, 129, 0.04) 100%);
+  border: 1px solid rgba(241, 90, 41, 0.18);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.quick-insight-banner:hover {
+  border-color: rgba(241, 90, 41, 0.35);
+  box-shadow: 0 3px 12px -2px rgba(241, 90, 41, 0.1);
+}
+
+.quick-insight-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.quick-insight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(135deg, #f15a29 0%, #ea580c 100%);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(241, 90, 41, 0.25);
+}
+
+.quick-insight-badge svg {
+  flex-shrink: 0;
+}
+
+.quick-insight-scope {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.quick-insight-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-insight-text mark,
+.quick-insight-text .highlight-metric {
+  background: transparent;
+  color: var(--accent-orange);
+  font-weight: 700;
+}
+
+.quick-insight-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.quick-insight-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.insight-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+[data-theme="light"] .insight-chip {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.insight-chip strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.insight-chip.chip-positive {
+  color: var(--accent-emerald);
+  border-color: rgba(16, 185, 129, 0.3);
+  background: var(--accent-emerald-bg);
+}
+
+.insight-chip.chip-accent {
+  color: var(--accent-blue);
+  border-color: rgba(2, 132, 199, 0.3);
+  background: var(--accent-blue-bg);
+}
+
+.insight-chip.chip-orange {
+  color: #ea580c;
+  border-color: rgba(241, 90, 41, 0.3);
+  background: rgba(241, 90, 41, 0.08);
+}
+
+.quick-insight-refresh-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.quick-insight-refresh-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-accent);
+  color: var(--accent-orange);
+}
+
+.quick-insight-refresh-btn:active,
+.quick-insight-refresh-btn.rotating {
+  animation: spinInsightRefresh 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--accent-orange);
+}
+
+@keyframes spinInsightRefresh {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .quick-insight-banner {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .quick-insight-chips {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
+
+/* ==========================================================================
    การ์ด KPI สรุปผลหลัก (Executive KPI Cards Grid)
    ========================================================================== */
 .kpi-grid {

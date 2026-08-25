@@ -144,6 +144,30 @@
 
         <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
         <section class="view-section active" id="view-dashboard">
+          <!-- กล่องสรุปวิเคราะห์ด่วนอัจฉริยะแบบกะทัดรัด (Compact Quick Insight Bar) -->
+          <div class="quick-insight-banner compact" id="quick-insight-box">
+            <div class="quick-insight-left">
+              <span class="quick-insight-badge">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                INSIGHT
+              </span>
+              <span class="quick-insight-scope" id="quick-insight-scope">ปี 2569</span>
+            </div>
+            <div class="quick-insight-text" id="quick-insight-summary">
+              กำลังวิเคราะห์ข้อมูลการเปลี่ยนแปลง KPI สำคัญ...
+            </div>
+            <div class="quick-insight-chips" id="quick-insight-chips">
+              <!-- Dynamic metric chips rendered by app.js -->
+            </div>
+            <button class="quick-insight-refresh-btn" onclick="renderQuickInsight(true)" title="วิเคราะห์สรุปข้อมูลใหม่ (Re-evaluate)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+
           <!-- 4 การ์ดสรุป KPI ด้านบน -->
           <div class="kpi-grid">
             <!-- การ์ด 1: ยอดลดต้นทุนรวม -->
