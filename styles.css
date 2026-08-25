@@ -575,14 +575,23 @@ html, body {
   transform: rotate(-90deg);
   width: 40px;
   height: 40px;
+  display: block;
 }
 
-.gauge-circle circle {
+.gauge-circle circle,
+.gauge-circle path {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 3.8;
 }
 
-.gauge-bg { stroke: rgba(255, 255, 255, 0.08); }
+.gauge-bg {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="light"] .gauge-bg {
+  stroke: rgba(15, 23, 42, 0.12);
+}
+
 .gauge-bar {
   stroke: var(--accent-emerald);
   stroke-linecap: round;
@@ -1470,6 +1479,7 @@ html, body {
   position: relative;
   overflow: hidden;
   animation: cardStaggerIn 0.45s var(--ease-gentle) backwards;
+  cursor: pointer;
 }
 
 .goal-cards-grid .goal-card:nth-child(1) { animation-delay: 50ms; }
@@ -1480,9 +1490,19 @@ html, body {
 .goal-cards-grid .goal-card:nth-child(6) { animation-delay: 300ms; }
 
 .goal-card:hover {
-  border-color: rgba(2, 132, 199, 0.45);
+  border-color: rgba(2, 132, 199, 0.55);
   transform: translateY(-4px);
-  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.35), 0 0 16px rgba(2, 132, 199, 0.12);
+  box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.4), 0 0 20px rgba(2, 132, 199, 0.18);
+}
+
+.goal-card.achieved:hover {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.4), 0 0 20px rgba(16, 185, 129, 0.18);
+}
+
+.goal-card.at-risk:hover {
+  border-color: rgba(244, 63, 94, 0.55);
+  box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.4), 0 0 20px rgba(244, 63, 94, 0.18);
 }
 
 .goal-card::before {
@@ -1502,6 +1522,175 @@ html, body {
 
 .goal-card.at-risk::before {
   background: var(--accent-rose);
+}
+
+/* Micro Metric Grid inside Goal Card (Numbers to Reach Goal & Percentages) */
+.goal-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+@media (max-width: 480px) {
+  .goal-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+.goal-metric-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.goal-metric-lbl {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.goal-metric-val {
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.goal-metric-gap-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 2px;
+  width: fit-content;
+}
+
+.goal-metric-gap-tag.deficit {
+  background: rgba(241, 90, 41, 0.15);
+  color: var(--accent-orange);
+  border: 1px solid rgba(241, 90, 41, 0.3);
+}
+
+.goal-metric-gap-tag.surplus {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Modal Card Large for Goal Drilldown */
+.modal-card-large {
+  max-width: 860px !important;
+  width: 95% !important;
+}
+
+.goal-detail-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .goal-detail-matrix-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .goal-detail-matrix-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gdetail-stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gdetail-stat-lbl {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.gdetail-stat-val {
+  font-size: 19px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.gdetail-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.goal-chart-modal-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .goal-chart-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.goal-chart-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.goal-chart-breakdown-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.goal-chart-custom-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.goal-legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.goal-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .goal-card-header {

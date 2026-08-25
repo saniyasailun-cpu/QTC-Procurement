@@ -1028,7 +1028,7 @@ function renderMonthlyKPITracking() {
 
   const kpiSub = document.querySelector('#view-kpi-tracking .card-header-sub');
   if (kpiSub) {
-    kpiSub.textContent = `เปรียบเทียบมูลค่าจริงเทียบเป้าหมายการลดต้นทุน ${(State.targetRate * 100).toFixed(1)}% (ปี ${State.activeYear === 'ALL' ? 'ทุกปี' : State.activeYear})`;
+    kpiSub.textContent = `เปรียบเทียบมูลค่าจริงเทียบเป้าหมายการลดต้นทุน ${(State.targetRate * 100).toFixed(1)}% (${formatYearBE(State.activeYear)})`;
   }
   const targetTh = document.querySelector('#monthly-kpi-table th:nth-child(4)');
   if (targetTh) {
@@ -1088,7 +1088,7 @@ function renderMultiYearChart() {
     };
   });
 
-  const labels = multiYearData.map(y => `ปี ${y.year}`);
+  const labels = multiYearData.map(y => formatYearBE(y.year));
   const purchaseValues = multiYearData.map(y => y.purchaseMB);
   const savingsValues = multiYearData.map(y => y.savingMB);
 
@@ -2336,6 +2336,15 @@ function initGoals() {
   });
 }
 
+function formatYearBE(yr) {
+  if (!yr || yr === 'ALL') return 'ทุกปี';
+  const yNum = parseInt(yr, 10);
+  if (!isNaN(yNum)) {
+    return `ปี ${yNum + 543} (${yNum})`;
+  }
+  return `ปี ${yr}`;
+}
+
 function calculateGoalProgress(goal) {
   let txs = State.transactions || [];
 
@@ -2357,6 +2366,7 @@ function calculateGoalProgress(goal) {
   let target = parseFloat(goal.targetValue) || 0;
   let formattedCurrent = '';
   let formattedTarget = '';
+  let unit = goal.category === 'savings_rate' ? '%' : '฿';
 
   if (goal.category === 'savings_thb') {
     current = txs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
@@ -2387,6 +2397,36 @@ function calculateGoalProgress(goal) {
 
   const pct = target > 0 ? (current / target) * 100 : 0;
   const clampedPct = Math.min(Math.max(pct, 0), 100);
+  const isAchieved = pct >= 100;
+
+  // คำนวณยอดที่ยังขาดอีกเพื่อถึงเป้าหมาย (Numbers and Percent to reach goal)
+  let remainingVal = 0;
+  let surplusVal = 0;
+  let remainingPct = 0;
+  let formattedGapText = '';
+  let formattedGapTag = '';
+
+  if (isAchieved) {
+    surplusVal = current - target;
+    const surplusPct = pct - 100;
+    if (goal.category === 'savings_rate') {
+      formattedGapText = `+${surplusVal.toFixed(2)}% เกินเป้า`;
+      formattedGapTag = `🎉 เกินเป้า +${surplusPct.toFixed(1)}%`;
+    } else {
+      formattedGapText = `+${formatCurrency(surplusVal, 0)} เกินเป้า`;
+      formattedGapTag = `🎉 เกินเป้า +${surplusPct.toFixed(1)}%`;
+    }
+  } else {
+    remainingVal = target - current;
+    remainingPct = 100 - pct;
+    if (goal.category === 'savings_rate') {
+      formattedGapText = `ขาดอีก ${remainingVal.toFixed(2)}%`;
+      formattedGapTag = `ขาดอีก ${remainingPct.toFixed(1)}%`;
+    } else {
+      formattedGapText = `ขาดอีก ${formatCurrency(remainingVal, 0)}`;
+      formattedGapTag = `ขาดอีก ${remainingPct.toFixed(1)}%`;
+    }
+  }
 
   let status = 'on-track';
   let statusText = 'กำลังดำเนินการ';
@@ -2403,10 +2443,18 @@ function calculateGoalProgress(goal) {
     target,
     pct,
     clampedPct,
+    isAchieved,
+    remainingVal,
+    surplusVal,
+    remainingPct,
     formattedCurrent,
     formattedTarget,
+    formattedGapText,
+    formattedGapTag,
     status,
-    statusText
+    statusText,
+    unit,
+    txCount: txs.length
   };
 }
 
@@ -2425,7 +2473,7 @@ function renderGoalsWidget() {
   const dashCardsContainer = document.getElementById('dashboard-goal-cards');
   if (!allCardsContainer && !dashCardsContainer) return;
 
-  const yearText = State.activeYear === 'ALL' ? 'ทุกปี' : `ปี ${State.activeYear}`;
+  const yearText = formatYearBE(State.activeYear);
   const yearTextEl = document.getElementById('goals-scope-year-text');
   if (yearTextEl) yearTextEl.textContent = yearText;
 
@@ -2459,16 +2507,16 @@ function renderGoalsWidget() {
     dashSub.textContent = `บรรลุเป้าหมายแล้ว ${achievedCount}/${totalGoals} รายการ (เฉลี่ยความสำเร็จรวม ${overallAvgPct}%)`;
   }
 
-  // สร้าง HTML สำหรับการ์ดเป้าหมาย
+  // สร้าง HTML สำหรับการ์ดเป้าหมาย พร้อมตัวเลขและเปอร์เซ็นต์ที่ต้องทำเพิ่ม + คลิกดูกราฟวงกลม
   const generateCardHTML = (g) => {
     const prog = calculateGoalProgress(g);
     const catName = getGoalCategoryName(g.category);
-    const scopeYear = g.year === 'ALL' ? 'ทุกปี' : `ปี ${g.year}`;
+    const scopeYear = formatYearBE(g.year);
     const scopeQuarter = g.quarter === 'ALL' ? 'ทั้งปี' : g.quarter;
     const scopePIC = g.pic === 'ALL' ? '' : `PIC: ${g.pic}`;
 
     return `
-      <div class="goal-card ${prog.status}" id="goal-card-${g.id}">
+      <div class="goal-card ${prog.status}" id="goal-card-${g.id}" onclick="openGoalChartModal('${g.id}')" title="คลิกเพื่อดูสถิติและกราฟวงกลม (Pie Chart)">
         <div>
           <div class="goal-meta-tags">
             <span class="goal-tag goal-tag-cat">${catName}</span>
@@ -2479,6 +2527,25 @@ function renderGoalsWidget() {
           <div class="goal-card-header">
             <div class="goal-title">${g.title}</div>
             <span class="goal-status-badge ${prog.status}">${prog.statusText}</span>
+          </div>
+        </div>
+
+        <!-- กล่องข้อมูลตัวเลขและเปอร์เซ็นต์สู่เป้าหมาย (Numbers & Percentages to reach goal) -->
+        <div class="goal-metrics-grid">
+          <div class="goal-metric-cell">
+            <span class="goal-metric-lbl">ทำได้แล้ว (Achieved)</span>
+            <span class="goal-metric-val" style="color: var(--accent-emerald);">${prog.formattedCurrent}</span>
+            <span class="goal-metric-gap-tag surplus">${prog.pct.toFixed(1)}%</span>
+          </div>
+          <div class="goal-metric-cell">
+            <span class="goal-metric-lbl">เป้าหมาย (Target)</span>
+            <span class="goal-metric-val" style="color: var(--text-primary);">${prog.formattedTarget}</span>
+            <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">เป้า 100%</span>
+          </div>
+          <div class="goal-metric-cell">
+            <span class="goal-metric-lbl">${prog.isAchieved ? 'ยอดที่เกินเป้า' : 'ยอดที่ขาดอีก (Gap)'}</span>
+            <span class="goal-metric-val" style="color: ${prog.isAchieved ? 'var(--accent-emerald)' : 'var(--accent-orange)'};">${prog.formattedGapText}</span>
+            <span class="goal-metric-gap-tag ${prog.isAchieved ? 'surplus' : 'deficit'}">${prog.formattedGapTag}</span>
           </div>
         </div>
 
@@ -2494,17 +2561,21 @@ function renderGoalsWidget() {
 
         ${g.notes ? `<div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4;">💡 ${g.notes}</div>` : ''}
 
-        <div class="goal-details-row">
+        <div class="goal-details-row" onclick="event.stopPropagation()">
           <div class="goal-deadline-text">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            กำหนดเป้าหมาย: ${g.deadline || 'ไม่ระบุ'}
+            ครบกำหนด: ${g.deadline || 'ไม่ระบุ'}
           </div>
           <div class="goal-card-actions">
-            <button class="goal-action-btn" onclick="openEditGoalModal('${g.id}')" title="แก้ไขเป้าหมาย">
+            <button class="goal-action-btn" onclick="event.stopPropagation(); openGoalChartModal('${g.id}')" title="คลิกดูสถิติและกราฟวงกลม">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              กราฟวงกลม
+            </button>
+            <button class="goal-action-btn" onclick="event.stopPropagation(); openEditGoalModal('${g.id}')" title="แก้ไขเป้าหมาย">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               แก้ไข
             </button>
-            <button class="goal-action-btn delete-btn" onclick="deleteGoal('${g.id}')" title="ลบเป้าหมาย">
+            <button class="goal-action-btn delete-btn" onclick="event.stopPropagation(); deleteGoal('${g.id}')" title="ลบเป้าหมาย">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -2513,7 +2584,7 @@ function renderGoalsWidget() {
     `;
   };
 
-  // เรนเดอร์บน Dashboard (คัดเฉพาะ 3-4 การ์ดสำคัญสำหรับปีที่เลือก)
+  // เรนเดอร์บน Dashboard
   if (dashCardsContainer) {
     let dashGoals = goalsList.filter(g => g.year === State.activeYear || g.year === 'ALL');
     if (dashGoals.length === 0) dashGoals = goalsList;
@@ -2537,6 +2608,378 @@ function renderGoalsWidget() {
     } else {
       allCardsContainer.innerHTML = filtered.map(generateCardHTML).join('');
     }
+  }
+}
+
+// -------------------------------------------------------------
+// ระบบแสดงกราฟวงกลมและการเจาะลึกสถิติเป้าหมาย (Goal Pie Chart Modal)
+// -------------------------------------------------------------
+State.activeGoalChartId = null;
+State.activeGoalChartView = 'progress';
+
+window.openGoalChartModal = function(goalId) {
+  const goal = (State.goals || []).find(g => g.id === goalId);
+  if (!goal) return;
+
+  State.activeGoalChartId = goalId;
+  State.activeGoalChartView = State.activeGoalChartView || 'progress';
+
+  const modal = document.getElementById('goal-chart-modal');
+  if (!modal) return;
+
+  const prog = calculateGoalProgress(goal);
+
+  // ข้อมูลส่วนหัว
+  document.getElementById('gdetail-cat-badge').textContent = getGoalCategoryName(goal.category);
+  document.getElementById('gdetail-year-badge').textContent = formatYearBE(goal.year);
+  document.getElementById('gdetail-quarter-badge').textContent = goal.quarter === 'ALL' ? 'ทั้งปี' : goal.quarter;
+  
+  const statusBadge = document.getElementById('gdetail-status-badge');
+  statusBadge.className = `goal-status-badge ${prog.status}`;
+  statusBadge.textContent = prog.statusText;
+
+  document.getElementById('gdetail-title').textContent = goal.title;
+
+  // 4-Card Summary Matrix
+  document.getElementById('gdetail-val-target').textContent = prog.formattedTarget;
+  document.getElementById('gdetail-sub-target').textContent = `ขอบเขต: ${formatYearBE(goal.year)} (${goal.quarter === 'ALL' ? 'Full Year' : goal.quarter})`;
+
+  document.getElementById('gdetail-val-current').textContent = prog.formattedCurrent;
+  document.getElementById('gdetail-sub-current').textContent = `อัตราความสำเร็จ ${prog.pct.toFixed(1)}%`;
+
+  const lblGap = document.getElementById('gdetail-lbl-gap');
+  const valGap = document.getElementById('gdetail-val-gap');
+  const subGap = document.getElementById('gdetail-sub-gap');
+
+  if (prog.isAchieved) {
+    lblGap.textContent = '🎉 ยอดที่เกินเป้าหมาย (Surplus)';
+    valGap.style.color = 'var(--accent-emerald)';
+    valGap.textContent = `+${goal.category === 'savings_rate' ? prog.surplusVal.toFixed(2) + '%' : formatCurrency(prog.surplusVal, 0)}`;
+    subGap.textContent = `เกินเป้าหมายที่ตั้งไว้ +${(prog.pct - 100).toFixed(1)}%`;
+  } else {
+    lblGap.textContent = '⏳ ยอดที่ขาดอีก (Remaining to Goal)';
+    valGap.style.color = 'var(--accent-orange)';
+    valGap.textContent = goal.category === 'savings_rate' ? `${prog.remainingVal.toFixed(2)}%` : formatCurrency(prog.remainingVal, 0);
+    subGap.textContent = `ขาดอีก ${prog.remainingPct.toFixed(1)}% เพื่อถึงเป้า 100%`;
+  }
+
+  document.getElementById('gdetail-val-pct').textContent = prog.pct.toFixed(1) + '%';
+  document.getElementById('gdetail-sub-deadline').textContent = `ครบกำหนด: ${goal.deadline || '31 ธ.ค. 2026'}`;
+
+  // Progress Bar
+  document.getElementById('gdetail-progress-ratio').textContent = `${prog.formattedCurrent} / ${prog.formattedTarget}`;
+  const pill = document.getElementById('gdetail-progress-pill');
+  pill.className = `kpi-badge ${prog.isAchieved ? 'success' : (prog.pct < 50 ? 'danger' : 'warning')}`;
+  pill.textContent = `${prog.pct.toFixed(1)}% สำเร็จ`;
+
+  document.getElementById('gdetail-progress-bar-fill').style.width = `${prog.clampedPct}%`;
+
+  // Notes
+  const notesBox = document.getElementById('gdetail-notes-box');
+  const notesText = document.getElementById('gdetail-notes-text');
+  if (goal.notes) {
+    notesBox.style.display = 'block';
+    notesText.textContent = goal.notes;
+  } else {
+    notesBox.style.display = 'none';
+  }
+
+  // ซิงค์ปุ่มแท็บ
+  document.querySelectorAll('#goal-chart-view-pills .pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-chart-view') === State.activeGoalChartView);
+  });
+
+  renderGoalPieChart();
+  modal.classList.add('active');
+};
+
+window.closeGoalChartModal = function() {
+  const modal = document.getElementById('goal-chart-modal');
+  if (modal) modal.classList.remove('active');
+  if (State.charts.goalPie) {
+    State.charts.goalPie.destroy();
+    State.charts.goalPie = null;
+  }
+};
+
+window.switchGoalChartView = function(viewType) {
+  State.activeGoalChartView = viewType;
+  document.querySelectorAll('#goal-chart-view-pills .pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-chart-view') === viewType);
+  });
+  renderGoalPieChart();
+};
+
+window.editCurrentChartGoal = function() {
+  if (State.activeGoalChartId) {
+    const id = State.activeGoalChartId;
+    closeGoalChartModal();
+    openEditGoalModal(id);
+  }
+};
+
+function renderGoalPieChart() {
+  const goalId = State.activeGoalChartId;
+  const goal = (State.goals || []).find(g => g.id === goalId);
+  if (!goal) return;
+
+  const canvas = document.getElementById('goalPieChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  if (State.charts.goalPie) {
+    State.charts.goalPie.destroy();
+    State.charts.goalPie = null;
+  }
+
+  const prog = calculateGoalProgress(goal);
+  const isDark = State.theme === 'dark';
+  const textColor = isDark ? '#f1f5f9' : '#0f172a';
+
+  let labels = [];
+  let data = [];
+  let bgColors = [];
+  let hoverColors = [];
+  let breakdownRows = [];
+  let chartTitle = '';
+
+  // ดึงรายการสั่งซื้อที่เข้าข่ายของเป้าหมายนี้
+  let txs = State.transactions || [];
+  if (goal.year && goal.year !== 'ALL') txs = txs.filter(t => t.year === goal.year);
+  if (goal.quarter && goal.quarter !== 'ALL') {
+    const ms = QUARTER_MONTHS[goal.quarter] || [];
+    txs = txs.filter(t => ms.includes(t.month));
+  }
+  if (goal.pic && goal.pic !== 'ALL') {
+    txs = txs.filter(t => (t.pic || '').toLowerCase() === goal.pic.toLowerCase());
+  }
+
+  const viewType = State.activeGoalChartView || 'progress';
+
+  if (viewType === 'progress') {
+    chartTitle = 'สัดส่วนความคืบหน้าเทียบเป้าหมาย 100%';
+    document.getElementById('gdetail-th-name').textContent = 'สถานะความก้าวหน้า';
+    document.getElementById('gdetail-th-val').textContent = goal.category === 'savings_rate' ? 'อัตรา (%)' : 'มูลค่า (บาท)';
+
+    if (prog.isAchieved) {
+      labels = ['เป้าหมายที่ตั้งไว้ (Target)', 'ยอดที่เกินเป้าหมาย (Surplus)'];
+      data = [prog.target, prog.surplusVal];
+      bgColors = ['#0284c7', '#10b981'];
+      hoverColors = ['#0369a1', '#059669'];
+
+      const totalPie = prog.current;
+      breakdownRows = [
+        { name: '🎯 เป้าหมายที่ตั้งไว้ (Target)', val: goal.category === 'savings_rate' ? prog.target.toFixed(2) + '%' : formatCurrency(prog.target, 0), pct: totalPie > 0 ? ((prog.target / totalPie) * 100).toFixed(1) + '%' : '100%' },
+        { name: '🎉 ยอดที่เกินเป้าหมาย (Surplus)', val: goal.category === 'savings_rate' ? `+${prog.surplusVal.toFixed(2)}%` : `+${formatCurrency(prog.surplusVal, 0)}`, pct: totalPie > 0 ? ((prog.surplusVal / totalPie) * 100).toFixed(1) + '%' : '0%' }
+      ];
+    } else {
+      labels = ['ทำได้แล้ว (Achieved)', 'ยอดที่ยังขาดอีก (Gap to 100%)'];
+      data = [prog.current, prog.remainingVal];
+      bgColors = ['#10b981', '#f59e0b'];
+      hoverColors = ['#059669', '#d97706'];
+
+      const totalPie = prog.target;
+      breakdownRows = [
+        { name: '🚀 ทำได้แล้ว (Achieved)', val: goal.category === 'savings_rate' ? prog.current.toFixed(2) + '%' : formatCurrency(prog.current, 0), pct: prog.pct.toFixed(1) + '%' },
+        { name: '⏳ ยอดที่ยังขาดอีก (Remaining)', val: goal.category === 'savings_rate' ? prog.remainingVal.toFixed(2) + '%' : formatCurrency(prog.remainingVal, 0), pct: prog.remainingPct.toFixed(1) + '%' }
+      ];
+    }
+
+  } else if (viewType === 'strategy') {
+    chartTitle = 'สัดส่วนผลประหยัดจำแนกตามกลยุทธ์จัดซื้อ';
+    document.getElementById('gdetail-th-name').textContent = 'กลยุทธ์การต่อรอง';
+    document.getElementById('gdetail-th-val').textContent = 'ยอดประหยัด (บาท)';
+
+    const stratMap = {};
+    txs.forEach(t => {
+      const s = t.strategy || 'อื่นๆ';
+      stratMap[s] = (stratMap[s] || 0) + (t.totalSaving || 0);
+    });
+
+    const palette = ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
+    const totalSaving = Object.values(stratMap).reduce((sum, v) => sum + v, 0);
+
+    let idx = 0;
+    Object.entries(stratMap)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([strat, val]) => {
+        if (val > 0) {
+          labels.push(strat);
+          data.push(val);
+          bgColors.push(palette[idx % palette.length]);
+          hoverColors.push(palette[idx % palette.length]);
+          breakdownRows.push({
+            name: strat,
+            val: formatCurrency(val, 0),
+            pct: totalSaving > 0 ? ((val / totalSaving) * 100).toFixed(1) + '%' : '0.0%'
+          });
+          idx++;
+        }
+      });
+
+    if (data.length === 0) {
+      labels = ['ไม่มีข้อมูลกลยุทธ์'];
+      data = [1];
+      bgColors = ['#64748b'];
+      breakdownRows.push({ name: 'ไม่มีข้อมูลรายการจัดซื้อ', val: '฿0', pct: '0%' });
+    }
+
+  } else if (viewType === 'pic') {
+    chartTitle = 'สัดส่วนผลงานจำแนกตามเจ้าหน้าที่จัดซื้อ (PIC)';
+    document.getElementById('gdetail-th-name').textContent = 'ผู้รับผิดชอบ (PIC)';
+    document.getElementById('gdetail-th-val').textContent = 'ยอดประหยัด (บาท)';
+
+    const picMap = {};
+    txs.forEach(t => {
+      const p = t.pic || 'Unassigned';
+      picMap[p] = (picMap[p] || 0) + (t.totalSaving || 0);
+    });
+
+    const palette = ['#0ea5e9', '#10b981', '#f59e0b', '#a855f7', '#f43f5e', '#3b82f6'];
+    const totalSaving = Object.values(picMap).reduce((sum, v) => sum + v, 0);
+
+    let idx = 0;
+    Object.entries(picMap)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([pic, val]) => {
+        if (val > 0) {
+          labels.push(pic);
+          data.push(val);
+          bgColors.push(palette[idx % palette.length]);
+          hoverColors.push(palette[idx % palette.length]);
+          breakdownRows.push({
+            name: `👤 ${pic}`,
+            val: formatCurrency(val, 0),
+            pct: totalSaving > 0 ? ((val / totalSaving) * 100).toFixed(1) + '%' : '0.0%'
+          });
+          idx++;
+        }
+      });
+
+    if (data.length === 0) {
+      labels = ['ไม่มีข้อมูล PIC'];
+      data = [1];
+      bgColors = ['#64748b'];
+      breakdownRows.push({ name: 'ไม่มีข้อมูลรายการจัดซื้อ', val: '฿0', pct: '0%' });
+    }
+
+  } else if (viewType === 'monthly') {
+    chartTitle = 'สัดส่วนผลประหยัดจำแนกตามรายเดือน';
+    document.getElementById('gdetail-th-name').textContent = 'เดือนที่บันทึกผลงาน';
+    document.getElementById('gdetail-th-val').textContent = 'ยอดประหยัด (บาท)';
+
+    const monthMap = {};
+    MONTH_ORDER.forEach(m => { monthMap[m] = 0; });
+    txs.forEach(t => {
+      const m = (t.month || 'JAN').toUpperCase();
+      if (monthMap[m] !== undefined) {
+        monthMap[m] += (t.totalSaving || 0);
+      }
+    });
+
+    const palette = ['#38bdf8', '#0284c7', '#06b6d4', '#10b981', '#34d399', '#f59e0b', '#fb923c', '#f43f5e', '#ec4899', '#a855f7', '#6366f1', '#475569'];
+    const totalSaving = Object.values(monthMap).reduce((sum, v) => sum + v, 0);
+
+    let idx = 0;
+    MONTH_ORDER.forEach(m => {
+      const val = monthMap[m];
+      if (val > 0) {
+        labels.push(THAI_MONTHS[m] || m);
+        data.push(val);
+        bgColors.push(palette[idx % palette.length]);
+        hoverColors.push(palette[idx % palette.length]);
+        breakdownRows.push({
+          name: `📅 ${THAI_MONTHS[m] || m}`,
+          val: formatCurrency(val, 0),
+          pct: totalSaving > 0 ? ((val / totalSaving) * 100).toFixed(1) + '%' : '0.0%'
+        });
+        idx++;
+      }
+    });
+
+    if (data.length === 0) {
+      labels = ['ยังไม่มีข้อมูลรายเดือน'];
+      data = [1];
+      bgColors = ['#64748b'];
+      breakdownRows.push({ name: 'ยังไม่มีข้อมูลผลประหยัด', val: '฿0', pct: '0%' });
+    }
+  }
+
+  document.getElementById('gdetail-breakdown-title').textContent = chartTitle;
+
+  // วาดกราฟวงกลมด้วย Chart.js (Donut Chart with Smooth Animations)
+  State.charts.goalPie = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: bgColors,
+        hoverBackgroundColor: hoverColors,
+        borderColor: isDark ? '#1e293b' : '#ffffff',
+        borderWidth: 2,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '58%',
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: isDark ? '#f8fafc' : '#0f172a',
+          bodyColor: isDark ? '#cbd5e1' : '#334155',
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: function(context) {
+              const label = context.label || '';
+              const val = context.raw || 0;
+              if (viewType === 'progress' && goal.category === 'savings_rate') {
+                return ` ${label}: ${Number(val).toFixed(2)}%`;
+              }
+              const total = context.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+              return ` ${label}: ${formatCurrency(val, 0)} (${pct}%)`;
+            }
+          }
+        }
+      },
+      animation: {
+        animateRotate: true,
+        animateScale: true,
+        duration: 750,
+        easing: 'easeOutQuart'
+      }
+    }
+  });
+
+  // สร้าง Custom Legend
+  const legendContainer = document.getElementById('goal-chart-legend');
+  if (legendContainer) {
+    legendContainer.innerHTML = labels.map((l, i) => `
+      <div class="goal-legend-pill">
+        <span class="goal-legend-dot" style="background: ${bgColors[i] || '#ccc'};"></span>
+        <span>${l}</span>
+      </div>
+    `).join('');
+  }
+
+  // สร้างแถวในตารางรายละเอียดสัดส่วน
+  const tbody = document.getElementById('gdetail-breakdown-tbody');
+  if (tbody) {
+    tbody.innerHTML = breakdownRows.map(row => `
+      <tr>
+        <td style="font-weight: 600;">${row.name}</td>
+        <td style="text-align: right; font-family: var(--font-display); font-weight: 700; color: var(--accent-primary);">${row.val}</td>
+        <td style="text-align: right; font-family: var(--font-display); font-weight: 700;">${row.pct}</td>
+      </tr>
+    `).join('');
   }
 }
 
