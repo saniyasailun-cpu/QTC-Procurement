@@ -98,6 +98,68 @@ const THAI_STRATEGIES = {
   'เพิ่มเครดิต': 'เพิ่มเครดิต'
 };
 
+// จานสีที่โดดเด่น คมชัด แตกต่างกันอย่างชัดเจน ไม่ซ้ำกัน (Distinct Multi-Hue Color Palette)
+const DISTINCT_PALETTE = [
+  '#0284c7', // 1. Sky/Ocean Blue
+  '#10b981', // 2. Emerald Green
+  '#f59e0b', // 3. Amber Gold
+  '#8b5cf6', // 4. Royal Violet
+  '#ec4899', // 5. Rose Pink
+  '#06b6d4', // 6. Vibrant Cyan
+  '#f97316', // 7. Sunset Orange
+  '#84cc16', // 8. Lime Green
+  '#d946ef', // 9. Fuchsia Magenta
+  '#6366f1', // 10. Deep Indigo
+  '#14b8a6', // 11. Teal
+  '#ef4444', // 12. Crimson Coral
+  '#3b82f6', // 13. Cobalt Blue
+  '#eab308', // 14. Golden Yellow
+  '#a855f7', // 15. Bright Purple
+  '#059669', // 16. Forest Mint
+  '#fb7185', // 17. Coral Blush
+  '#38bdf8'  // 18. Electric Cyan
+];
+
+// สีประจำ 12 เดือน ให้มีสีที่แตกต่างกันชัดเจนครบทุกเดือน (12 Distinct Months Palette)
+const MONTH_COLOR_MAP = {
+  'JAN': '#0284c7', // ม.ค. - Ocean Blue
+  'FEB': '#06b6d4', // ก.พ. - Vivid Cyan
+  'MAR': '#10b981', // มี.ค. - Emerald Green
+  'APR': '#84cc16', // เม.ย. - Lime Green
+  'MAY': '#eab308', // พ.ค. - Amber Yellow
+  'JUN': '#f97316', // มิ.ย. - Sunset Orange
+  'JUL': '#ef4444', // ก.ค. - Crimson Red
+  'AUG': '#ec4899', // ส.ค. - Rose Pink
+  'SEP': '#d946ef', // ก.ย. - Fuchsia Magenta
+  'OCT': '#8b5cf6', // ต.ค. - Royal Violet
+  'NOV': '#6366f1', // พ.ย. - Indigo Blue
+  'DEC': '#14b8a6'  // ธ.ค. - Teal
+};
+
+// สีประจำกลยุทธ์การจัดซื้อ (Dedicated Strategy Colors)
+const STRATEGY_COLOR_MAP = {
+  'Negotiate': '#0284c7',
+  'Compare + Negotiate': '#10b981',
+  'Avoidance': '#8b5cf6',
+  'Rebate': '#f59e0b',
+  'เพิ่มเครดิต': '#ec4899',
+  'Credit Extension': '#ec4899',
+  'Change Spec': '#06b6d4',
+  'Change Supplier': '#f97316',
+  'Volume Discount': '#84cc16',
+  'Direct Import': '#d946ef',
+  'Contract Term': '#6366f1'
+};
+
+// สีประจำเจ้าหน้าที่จัดซื้อ (Dedicated PIC Colors)
+const PIC_COLOR_MAP = {
+  'Pawina': '#0284c7',
+  'Tanida': '#10b981',
+  'Yuwanit': '#f59e0b',
+  'Dusit': '#8b5cf6',
+  'Saniya': '#ec4899'
+};
+
 // เริ่มต้นการทำงานเมื่อโหลดหน้าเสร็จ
 document.addEventListener('DOMContentLoaded', () => {
   // โหลดเป้าหมายที่บันทึกไว้
@@ -1043,7 +1105,7 @@ function renderStrategyDonutChart(scopedTxs) {
   const labels = sortedKeys.map(k => THAI_STRATEGIES[k] || k);
   const dataValues = sortedKeys.map(k => stratMap[k]);
 
-  const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
+  const colors = sortedKeys.map((k, idx) => STRATEGY_COLOR_MAP[k] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length]);
 
   if (State.charts.strategyDonut) {
     State.charts.strategyDonut.destroy();
@@ -1056,6 +1118,7 @@ function renderStrategyDonutChart(scopedTxs) {
       datasets: [{
         data: dataValues,
         backgroundColor: colors,
+        hoverBackgroundColor: colors,
         borderWidth: 2,
         borderColor: State.theme === 'dark' ? '#131b26' : '#ffffff'
       }]
@@ -1082,10 +1145,11 @@ function renderStrategyDonutChart(scopedTxs) {
       const amt = stratMap[k];
       const pct = ((amt / total) * 100).toFixed(1);
       const nameThai = THAI_STRATEGIES[k] || k;
+      const dotColor = colors[idx] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length];
       return `
         <div class="strat-item">
           <div class="strat-item-left">
-            <span class="strat-dot" style="background: ${colors[idx % colors.length]};"></span>
+            <span class="strat-dot" style="background: ${dotColor};"></span>
             <span class="strat-name">${nameThai}</span>
           </div>
           <div style="text-align: right; flex-shrink: 0;">
@@ -3002,7 +3066,6 @@ function renderGoalPieChart() {
       stratMap[s] = (stratMap[s] || 0) + (t.totalSaving || 0);
     });
 
-    const palette = ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
     const totalSaving = Object.values(stratMap).reduce((sum, v) => sum + v, 0);
 
     let idx = 0;
@@ -3010,10 +3073,11 @@ function renderGoalPieChart() {
       .sort((a, b) => b[1] - a[1])
       .forEach(([strat, val]) => {
         if (val > 0) {
+          const color = STRATEGY_COLOR_MAP[strat] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length];
           labels.push(strat);
           data.push(val);
-          bgColors.push(palette[idx % palette.length]);
-          hoverColors.push(palette[idx % palette.length]);
+          bgColors.push(color);
+          hoverColors.push(color);
           breakdownRows.push({
             name: strat,
             val: formatCurrency(val, 0),
@@ -3027,6 +3091,7 @@ function renderGoalPieChart() {
       labels = ['ไม่มีข้อมูลกลยุทธ์'];
       data = [1];
       bgColors = ['#64748b'];
+      hoverColors = ['#475569'];
       breakdownRows.push({ name: 'ไม่มีข้อมูลรายการจัดซื้อ', val: '฿0', pct: '0%' });
     }
 
@@ -3041,7 +3106,6 @@ function renderGoalPieChart() {
       picMap[p] = (picMap[p] || 0) + (t.totalSaving || 0);
     });
 
-    const palette = ['#0ea5e9', '#10b981', '#f59e0b', '#a855f7', '#f43f5e', '#3b82f6'];
     const totalSaving = Object.values(picMap).reduce((sum, v) => sum + v, 0);
 
     let idx = 0;
@@ -3049,10 +3113,11 @@ function renderGoalPieChart() {
       .sort((a, b) => b[1] - a[1])
       .forEach(([pic, val]) => {
         if (val > 0) {
+          const color = PIC_COLOR_MAP[pic] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length];
           labels.push(pic);
           data.push(val);
-          bgColors.push(palette[idx % palette.length]);
-          hoverColors.push(palette[idx % palette.length]);
+          bgColors.push(color);
+          hoverColors.push(color);
           breakdownRows.push({
             name: `👤 ${pic}`,
             val: formatCurrency(val, 0),
@@ -3066,6 +3131,7 @@ function renderGoalPieChart() {
       labels = ['ไม่มีข้อมูล PIC'];
       data = [1];
       bgColors = ['#64748b'];
+      hoverColors = ['#475569'];
       breakdownRows.push({ name: 'ไม่มีข้อมูลรายการจัดซื้อ', val: '฿0', pct: '0%' });
     }
 
@@ -3083,17 +3149,17 @@ function renderGoalPieChart() {
       }
     });
 
-    const palette = ['#38bdf8', '#0284c7', '#06b6d4', '#10b981', '#34d399', '#f59e0b', '#fb923c', '#f43f5e', '#ec4899', '#a855f7', '#6366f1', '#475569'];
     const totalSaving = Object.values(monthMap).reduce((sum, v) => sum + v, 0);
 
     let idx = 0;
     MONTH_ORDER.forEach(m => {
       const val = monthMap[m];
       if (val > 0) {
+        const color = MONTH_COLOR_MAP[m] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length];
         labels.push(THAI_MONTHS[m] || m);
         data.push(val);
-        bgColors.push(palette[idx % palette.length]);
-        hoverColors.push(palette[idx % palette.length]);
+        bgColors.push(color);
+        hoverColors.push(color);
         breakdownRows.push({
           name: `📅 ${THAI_MONTHS[m] || m}`,
           val: formatCurrency(val, 0),
@@ -3107,6 +3173,7 @@ function renderGoalPieChart() {
       labels = ['ยังไม่มีข้อมูลรายเดือน'];
       data = [1];
       bgColors = ['#64748b'];
+      hoverColors = ['#475569'];
       breakdownRows.push({ name: 'ยังไม่มีข้อมูลผลประหยัด', val: '฿0', pct: '0%' });
     }
   }
