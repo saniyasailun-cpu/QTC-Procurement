@@ -1831,8 +1831,8 @@ function renderSuppliersView() {
     if (!supplierMap[s]) {
       supplierMap[s] = { name: s, savings: 0, purchase: 0, count: 0, strategies: {} };
     }
-    supplierMap[s].savings += t.totalSaving;
-    supplierMap[s].purchase += t.totalPrice;
+    supplierMap[s].savings += (Number(t.totalSaving) || 0);
+    supplierMap[s].purchase += (Number(t.totalPrice) || 0);
     supplierMap[s].count += 1;
 
     const strat = t.strategy || 'Negotiate';
@@ -1887,8 +1887,8 @@ function renderPICLeaderboard() {
   scopedTxs.forEach(t => {
     const pic = t.pic || 'ไม่ระบุ';
     if (!picMap[pic]) picMap[pic] = { name: pic, savings: 0, purchase: 0, count: 0 };
-    picMap[pic].savings += t.totalSaving;
-    picMap[pic].purchase += t.totalPrice;
+    picMap[pic].savings += (Number(t.totalSaving) || 0);
+    picMap[pic].purchase += (Number(t.totalPrice) || 0);
     picMap[pic].count += 1;
   });
 
@@ -1927,9 +1927,10 @@ function renderPICLeaderboard() {
         stratPicMatrix[strat] = { strategy: strat, Total: 0 };
         PIC_KEYS.forEach(k => stratPicMatrix[strat][k] = 0);
       }
-      stratPicMatrix[strat].Total += t.totalSaving;
+      const saving = Number(t.totalSaving) || 0;
+      stratPicMatrix[strat].Total += saving;
       if (stratPicMatrix[strat][pic] !== undefined) {
-        stratPicMatrix[strat][pic] += t.totalSaving;
+        stratPicMatrix[strat][pic] += saving;
       }
     });
 
