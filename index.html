@@ -836,9 +836,28 @@
                   บันทึกและซิงค์ข้อมูลสดเดี๋ยวนี้ (Sync Now)
                 </button>
                 <button class="btn-action btn-action-secondary" onclick="clearGoogleSheetSettings()">
-                  ล้างการตั้งค่า
+                  ล้างการตั้งค่าชีต
                 </button>
               </div>
+
+              <!-- Option to paste CSV/Table directly -->
+              <details style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                <summary style="font-size: 12px; color: var(--accent-emerald); cursor: pointer; font-weight: 500; user-select: none;">
+                  📋 หรือวางข้อมูลตาราง / CSV จาก Google Sheet โดยตรง (Paste CSV Data)
+                </summary>
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                  <textarea id="csv-paste-input" rows="5" placeholder="วางข้อความที่คัดลอก (Copy) จาก Google Sheet หรือไฟล์ CSV ที่นี่... (เช่น Year,Month,PO,Supplier,...)&#10;ระบบจะแปลงเป็นตารางและบันทึกลงเซิร์ฟเวอร์ถาวรทันที" style="width: 100%; font-family: monospace; font-size: 11px; padding: 10px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); resize: vertical;"></textarea>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="btn-action btn-action-primary" onclick="importPastedCSVData()" style="font-size: 12px; padding: 7px 16px; background: var(--accent-emerald);">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      นำเข้าและบันทึกข้อมูลจากข้อความ CSV
+                    </button>
+                    <button class="btn-action btn-action-secondary" onclick="document.getElementById('csv-paste-input').value = ''" style="font-size: 12px; padding: 7px 12px;">
+                      ล้างข้อความ
+                    </button>
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
 

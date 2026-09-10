@@ -55,6 +55,43 @@ async function startServer() {
     }
   });
 
+  // API 3.5: ตั้งค่าและอ่านค่า Google Sheet URL สำหรับซิงค์สด (Server-wide)
+  app.get("/api/sheet-config", (req, res) => {
+    try {
+      const dataPath = path.join(process.cwd(), "data.json");
+      if (fs.existsSync(dataPath)) {
+        const d = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+        return res.json({
+          url: d.config?.gsheetUrl || "",
+          autoSync: !!d.config?.gsheetAutoSync
+        });
+      }
+      return res.json({ url: "", autoSync: false });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sheet-config", (req, res) => {
+    try {
+      const { url, autoSync } = req.body;
+      const dataPath = path.join(process.cwd(), "data.json");
+      if (fs.existsSync(dataPath)) {
+        const d = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+        if (!d.config) d.config = {};
+        d.config.gsheetUrl = (url || "").trim();
+        d.config.gsheetAutoSync = !!autoSync;
+        fs.writeFileSync(dataPath, JSON.stringify(d, null, 2), "utf8");
+        const jsPath = path.join(process.cwd(), "data.js");
+        fs.writeFileSync(jsPath, `window.KPI_DATA = ${JSON.stringify(d)};`, "utf8");
+        return res.json({ success: true, url: d.config.gsheetUrl, autoSync: d.config.gsheetAutoSync });
+      }
+      return res.status(404).json({ error: "data.json not found" });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // API 4: อัปโหลดไฟล์ Excel และอัปเดตข้อมูลทั้งชีตลง Backend (data.json, data.js และ 2026 KPI-Discount Supplier.xlsx)
   app.post("/api/upload-excel", (req, res) => {
     try {
