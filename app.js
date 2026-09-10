@@ -186,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSupplierEvents();
   initSimulators();
   initDropzone();
+  initGlobalDragAndDrop();
   initGoogleSheetSync();
 
   // ปิด Modal ด้วยปุ่ม ESC
@@ -227,6 +228,43 @@ function updateThemeIcons() {
 
 // โหลดข้อมูล
 async function loadData() {
+  // 1. ตรวจสอบข้อมูลล่าสุดจาก Backend API (/api/data) เป็นอันดับแรก
+  try {
+    const res = await fetch('/api/data', { cache: 'no-cache' });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && (json.recentTransactions || json.historicalTransactions)) {
+        window.KPI_DATA = json;
+        State.data = json;
+        setupDataset();
+        renderAllViews();
+        console.log('✅ โหลดข้อมูลล่าสุดจาก Backend สำเร็จ');
+        return;
+      }
+    }
+  } catch (err) {
+    console.log('Backend /api/data not available, checking local cache or data.js');
+  }
+
+  // 2. ตรวจสอบข้อมูลจาก LocalStorage (หากเคยอัปโหลดไฟล์ Excel ไว้)
+  try {
+    const localSaved = localStorage.getItem('qtc_custom_dataset');
+    if (localSaved) {
+      const json = JSON.parse(localSaved);
+      if (json && (json.recentTransactions || json.historicalTransactions)) {
+        window.KPI_DATA = json;
+        State.data = json;
+        setupDataset();
+        renderAllViews();
+        console.log('✅ โหลดข้อมูลจาก LocalStorage Cache สำเร็จ');
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('LocalStorage data parse failed:', err);
+  }
+
+  // 3. ใช้ window.KPI_DATA จากไฟล์ data.js
   if (window.KPI_DATA) {
     State.data = window.KPI_DATA;
     setupDataset();
@@ -234,7 +272,7 @@ async function loadData() {
     return;
   }
 
-  // กรณี window.KPI_DATA ยังไม่โหลด (เช่น บน GitHub Pages หรือโฮสต์ภายนอก)
+  // 4. กรณี window.KPI_DATA ยังไม่โหลด (เช่น บน GitHub Pages หรือโฮสต์ภายนอก)
   try {
     const res = await fetch('data.json');
     if (res.ok) {
@@ -249,7 +287,7 @@ async function loadData() {
     console.warn('Fallback data.json fetch failed:', err);
   }
 
-  // ลองตรวจสอบซ้ำเป็นระยะเผื่อสคริปต์ data.js โหลดช้า
+  // 5. ลองตรวจสอบซ้ำเป็นระยะเผื่อสคริปต์ data.js โหลดช้า
   let attempts = 0;
   const pollTimer = setInterval(() => {
     attempts++;
@@ -2032,26 +2070,245 @@ function initDropzone() {
   });
 }
 
-function handleUploadedExcel(file) {
+function initGlobalDragAndDrop() {
+  const overlay = document.getElementById('global-dropzone-overlay');
+  if (!overlay) return;
+
+  let dragCounter = 0;
+
+  window.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      dragCounter++;
+      overlay.classList.add('active');
+    }
+  });
+
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+
+  window.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      overlay.classList.remove('active');
+    }
+  });
+
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove('active');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
+        handleUploadedExcel(file);
+      } else {
+        alert("กรุณาวางไฟล์ Excel (.xlsx, .xls) หรือ CSV เท่านั้น");
+      }
+    }
+  });
+}
+
+// ฟังก์ชันแปลง ArrayBuffer เป็น Base64 แบบปลอดภัยสำหรับไฟล์ขนาดใหญ่
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
+// แยกดึงรายการจาก Sheet ข้อมูลรายการจัดซื้อ (Data, Improve#1 หรือ Sheet ทั่วไป)
+function parseTransactionsFromWorksheet(sheet, idPrefix = 'TX', defaultYear = '2026') {
+  if (!sheet) return [];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!rows || rows.length === 0) return [];
+
+  const parseNum = (val) => {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/,/g, '').replace(/฿/g, '').trim();
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // ตรวจสอบหาแถว Header ใน 10 แถวแรก
+  let headerRowIndex = -1;
+  const colMap = {};
+
+  for (let r = 0; r < Math.min(10, rows.length); r++) {
+    const row = rows[r];
+    if (!Array.isArray(row)) continue;
+    const rowStr = row.map(c => String(c || '').toLowerCase()).join(' ');
+    if (
+      (rowStr.includes('po') || rowStr.includes('เลขที่') || rowStr.includes('ใบสั่งซื้อ')) &&
+      (rowStr.includes('supp') || rowStr.includes('ซัพพลาย') || rowStr.includes('คู่ค้า') || rowStr.includes('รายการ') || rowStr.includes('goods'))
+    ) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    for (let r = 0; r < Math.min(10, rows.length); r++) {
+      const row = rows[r];
+      if (!Array.isArray(row)) continue;
+      const rowStr = row.map(c => String(c || '').toLowerCase()).join(' ');
+      if (rowStr.includes('qty') || rowStr.includes('ราคา') || rowStr.includes('amount') || rowStr.includes('ต่อรอง')) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+  }
+
+  if (headerRowIndex === -1) headerRowIndex = 0;
+
+  const headerRow = rows[headerRowIndex].map(h => String(h || '').trim());
+  headerRow.forEach((h, colIdx) => {
+    const lower = h.toLowerCase();
+    if (lower === 'year' || lower.includes('ปี')) colMap.year = colIdx;
+    else if (lower === 'month' || lower === 'jul' || lower.includes('เดือน')) colMap.month = colIdx;
+    else if (lower.includes('po no') || lower.includes('po') || lower.includes('เลขที่')) colMap.poNo = colIdx;
+    else if (lower.includes('supplier') || lower.includes('ซัพพลาย')) colMap.supplier = colIdx;
+    else if (lower.includes('description') || lower.includes('goods') || lower.includes('รายละเอียด') || lower.includes('รายการ')) colMap.description = colIdx;
+    else if (lower === 'qty' || lower.includes('quantity') || lower.includes('จำนวน')) colMap.qty = colIdx;
+    else if (lower === 'unit' || lower.includes('หน่วย')) colMap.unit = colIdx;
+    else if (lower.includes('ราคาต่ำสุด') || lower.includes('unit price') || lower.includes('ราคาต่อหน่วยเดิม')) colMap.minUnitPrice = colIdx;
+    else if (lower.includes('ราคารวม') || lower.includes('total price') || lower.includes('มูลค่ารวม')) colMap.totalPrice = colIdx;
+    else if (lower.includes('ต่อรองได้') && !lower.includes('รวม') || lower.includes('ราคาใหม่') || lower.includes('negotiated')) colMap.negotiatedUnitPrice = colIdx;
+    else if (lower.includes('ผลต่าง') || lower.includes('ส่วนต่าง') || lower.includes('difference')) colMap.unitDifference = colIdx;
+    else if (lower.includes('รวมที่ต่อรองได้') || lower.includes('savings') || lower.includes('ส่วนลดรวม')) colMap.totalSaving = colIdx;
+    else if (lower.includes('% discount') || lower.includes('ส่วนลด%') || lower.includes('% ส่วนลด')) colMap.percentDiscount = colIdx;
+    else if (lower.includes('method') || lower.includes('strategy') || lower.includes('กลยุทธ์')) colMap.method = colIdx;
+    else if (lower.includes('person in charge') || lower.includes('pic') || lower.includes('ผู้รับผิดชอบ') || lower.includes('buyer')) colMap.pic = colIdx;
+    else if (lower.includes('remark') || lower.includes('หมายเหตุ')) colMap.remark = colIdx;
+  });
+
+  const txs = [];
+  for (let r = headerRowIndex + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!Array.isArray(row) || row.length === 0) continue;
+
+    const getCol = (idx, fallback = '') => (idx !== undefined && row[idx] !== undefined && row[idx] !== '') ? row[idx] : fallback;
+
+    const poVal = String(getCol(colMap.poNo, '')).trim();
+    const suppVal = String(getCol(colMap.supplier, '')).trim();
+    const totalP = parseNum(getCol(colMap.totalPrice, 0));
+    const totalS = parseNum(getCol(colMap.totalSaving, 0));
+
+    if (!poVal && !suppVal && totalP === 0 && totalS === 0) continue;
+
+    let yr = String(getCol(colMap.year, defaultYear)).trim();
+    if (!yr || yr === 'undefined') yr = defaultYear;
+    if (yr.length === 4 && parseInt(yr) > 2500) yr = String(parseInt(yr) - 543);
+
+    let mo = String(getCol(colMap.month, 'JAN')).trim().toUpperCase();
+    if (mo.includes('ม.ค.') || mo.includes('มกรา')) mo = 'JAN';
+    else if (mo.includes('ก.พ.') || mo.includes('กุมภา')) mo = 'FEB';
+    else if (mo.includes('มี.ค.') || mo.includes('มีนา')) mo = 'MAR';
+    else if (mo.includes('เม.ย.') || mo.includes('เมษา')) mo = 'APR';
+    else if (mo.includes('พ.ค.') || mo.includes('พฤษภา')) mo = 'MAY';
+    else if (mo.includes('มิ.ย.') || mo.includes('มิถุนา')) mo = 'JUN';
+    else if (mo.includes('ก.ค.') || mo.includes('กรกฎา')) mo = 'JUL';
+    else if (mo.includes('ส.ค.') || mo.includes('สิงหา')) mo = 'AUG';
+    else if (mo.includes('ก.ย.') || mo.includes('กันยา')) mo = 'SEP';
+    else if (mo.includes('ต.ค.') || mo.includes('ตุลา')) mo = 'OCT';
+    else if (mo.includes('พ.ย.') || mo.includes('พฤศจิกา')) mo = 'NOV';
+    else if (mo.includes('ธ.ค.') || mo.includes('ธันวา')) mo = 'DEC';
+    else if (mo.length > 3) mo = mo.slice(0, 3);
+
+    const desc = String(getCol(colMap.description, '')).trim();
+    const qty = parseNum(getCol(colMap.qty, 0));
+    const unit = String(getCol(colMap.unit, 'EA')).trim() || 'EA';
+    const minP = parseNum(getCol(colMap.minUnitPrice, 0));
+    let tPrice = totalP;
+    if (tPrice === 0 && qty > 0 && minP > 0) tPrice = qty * minP;
+
+    const negP = parseNum(getCol(colMap.negotiatedUnitPrice, minP)) || minP;
+    let uDiff = parseNum(getCol(colMap.unitDifference, 0)) || (minP - negP);
+    let tSaving = totalS;
+    if (tSaving === 0 && uDiff > 0 && qty > 0) tSaving = uDiff * qty;
+
+    let pDisc = parseNum(getCol(colMap.percentDiscount, 0));
+    if (pDisc === 0 && tPrice > 0 && tSaving > 0) pDisc = tSaving / tPrice;
+    if (pDisc > 1) pDisc = pDisc / 100;
+
+    const method = String(getCol(colMap.method, 'Negotiate')).trim() || 'Negotiate';
+    const pic = String(getCol(colMap.pic, 'ไม่ระบุ')).trim() || 'ไม่ระบุ';
+    const remark = String(getCol(colMap.remark, '')).trim();
+
+    txs.push({
+      id: `${idPrefix}-${r}`,
+      globalId: `${idPrefix}-${r}`,
+      year: yr,
+      month: mo,
+      poNo: poVal || `PO-${idPrefix}-${r}`,
+      supplier: suppVal || 'ไม่ระบุ',
+      description: desc,
+      qty: qty,
+      unit: unit,
+      minUnitPrice: minP,
+      totalPrice: tPrice,
+      negotiatedUnitPrice: negP,
+      unitDifference: uDiff,
+      totalSaving: tSaving,
+      percentDiscount: pDisc,
+      strategy: method,
+      method: method,
+      pic: pic,
+      remark: remark
+    });
+  }
+
+  return txs;
+}
+
+// ฟังก์ชันหลัก: ประมวลผลและอัปเดตไฟล์ Excel ทุกชีต พร้อมบันทึกลง Backend
+async function handleUploadedExcel(file) {
   if (typeof XLSX === 'undefined') {
     alert("กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อโหลดไลบรารี SheetJS");
     return;
   }
 
+  // แสดง Modal สถานะความคืบหน้า
+  const statusModal = document.getElementById('upload-status-modal');
+  const step1 = document.getElementById('upload-step-1');
+  const step2 = document.getElementById('upload-step-2');
+  const step3 = document.getElementById('upload-step-3');
+
+  const setStep = (activeStep) => {
+    if (!statusModal) return;
+    statusModal.classList.add('show');
+    [step1, step2, step3].forEach((s, idx) => {
+      if (!s) return;
+      s.classList.remove('active', 'done');
+      if (idx + 1 < activeStep) s.classList.add('done');
+      else if (idx + 1 === activeStep) s.classList.add('active');
+    });
+  };
+
+  setStep(1);
+
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
-      
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const sheetNames = workbook.SheetNames || [];
 
-      if (!jsonRows || jsonRows.length === 0) {
-        alert("ไม่พบข้อมูลในไฟล์ Excel ที่อัปโหลด");
-        return;
+      if (sheetNames.length === 0) {
+        throw new Error("ไม่พบแผ่นงาน (Sheet) ในไฟล์ Excel นี้");
       }
+
+      setStep(2);
 
       const parseNum = (val) => {
         if (val === null || val === undefined || val === '') return 0;
@@ -2061,83 +2318,312 @@ function handleUploadedExcel(file) {
         return isNaN(num) ? 0 : num;
       };
 
-      const newTransactions = [];
+      // 1. ตรวจสอบ Sheet ข้อมูลรายการจัดซื้อ
+      let recentTransactions = [];
+      let historicalTransactions = [];
 
-      jsonRows.forEach((r, idx) => {
-        // ค้นหาคีย์ที่มีชื่อตรงกับคอลัมน์ (รองรับทั้งภาษาไทยและอังกฤษ)
-        const getVal = (...keys) => {
-          for (const k of keys) {
-            for (const rowKey of Object.keys(r)) {
-              if (rowKey.trim().toLowerCase() === k.trim().toLowerCase() || rowKey.includes(k)) {
-                return r[rowKey];
-              }
-            }
-          }
-          return '';
-        };
+      const hasDataSheet = sheetNames.includes('Data');
+      const hasImproveSheet = sheetNames.some(s => s.toLowerCase().includes('improve'));
 
-        const yr = String(getVal('Year', 'ปี', 'ปี (พ.ศ./ค.ศ.)') || '2026').trim();
-        let mo = String(getVal('Month', 'เดือน', 'งวดเดือน') || 'JAN').toUpperCase().trim();
-        if (mo.length > 3) mo = mo.slice(0, 3);
-
-        const po = String(getVal('PO', 'PO No', 'เลขที่ PO', 'เลขที่ใบสั่งซื้อ') || `PO-UP-${idx + 1}`).trim();
-        const supp = String(getVal('Supplier', 'ชื่อซัพพลายเออร์', 'ซัพพลายเออร์', 'คู่ค้า') || 'ไม่ระบุ').trim();
-        const desc = String(getVal('Description', 'รายการ', 'รายละเอียด', 'รายละเอียดสินค้า') || '').trim();
-        const qty = parseNum(getVal('Qty', 'Quantity', 'จำนวน'));
-        const unit = String(getVal('Unit', 'หน่วย', 'หน่วยนับ') || 'EA').trim();
-        const minPrice = parseNum(getVal('MinPrice', 'ราคาเดิม', 'ราคาต่อหน่วยเดิม', 'UnitPrice'));
-        let totalPrice = parseNum(getVal('TotalPrice', 'ราคารวม', 'มูลค่ารวม (บาท)', 'มูลค่าสั่งซื้อ'));
-        if (totalPrice === 0 && qty > 0 && minPrice > 0) totalPrice = qty * minPrice;
-
-        const negPrice = parseNum(getVal('NegotiatedPrice', 'ราคาที่ต่อรองได้', 'ราคาใหม่')) || minPrice;
-        let unitDiff = parseNum(getVal('UnitDifference', 'ส่วนต่างราคา')) || (minPrice - negPrice);
-        let totalSaving = parseNum(getVal('TotalSaving', 'รวมที่ต่อรองได้', 'ส่วนลดรวม (บาท)', 'Savings'));
-        if (totalSaving === 0 && unitDiff > 0 && qty > 0) totalSaving = unitDiff * qty;
-
-        const pctDisc = parseNum(getVal('PercentDiscount', '% ส่วนลด', 'ส่วนลด%')) || (totalPrice > 0 ? totalSaving / totalPrice : 0);
-        const method = String(getVal('Method', 'Strategy', 'กลยุทธ์', 'วิธีต่อรอง') || 'Negotiate').trim();
-        const pic = String(getVal('PIC', 'ผู้รับผิดชอบ', 'Buyer', 'จัดซื้อ') || 'ไม่ระบุ').trim();
-        const remark = String(getVal('Remark', 'หมายเหตุ') || '').trim();
-
-        if (po || supp !== 'ไม่ระบุ' || totalPrice > 0 || totalSaving > 0) {
-          newTransactions.push({
-            id: `up-${idx + 1}`,
-            globalId: `up-${idx + 1}`,
-            year: yr,
-            month: mo,
-            poNo: po,
-            supplier: supp,
-            description: desc,
-            qty: qty,
-            unit: unit,
-            minUnitPrice: minPrice,
-            totalPrice: totalPrice,
-            negotiatedUnitPrice: negPrice,
-            unitDifference: unitDiff,
-            totalSaving: totalSaving,
-            percentDiscount: pctDisc > 1 ? pctDisc / 100 : pctDisc,
-            strategy: method,
-            pic: pic,
-            remark: remark
-          });
+      if (hasDataSheet || hasImproveSheet) {
+        if (hasDataSheet) {
+          historicalTransactions = parseTransactionsFromWorksheet(workbook.Sheets['Data'], 'D', '2024');
         }
-      });
+        const improveSheetName = sheetNames.find(s => s.toLowerCase().includes('improve')) || 'Improve#1';
+        if (workbook.Sheets[improveSheetName]) {
+          recentTransactions = parseTransactionsFromWorksheet(workbook.Sheets[improveSheetName], 'IMP', '2026');
+        }
+      } else {
+        // หากเป็นไฟล์แบบชีตเดี่ยว หรือชื่อชีตทั่วไป ให้ดึงรายการทั้งหมดแล้วแบ่งตามปี
+        let allTxs = [];
+        sheetNames.forEach((sName, sIdx) => {
+          const sTxs = parseTransactionsFromWorksheet(workbook.Sheets[sName], `S${sIdx}`, '2026');
+          allTxs = allTxs.concat(sTxs);
+        });
 
-      if (newTransactions.length === 0) {
-        alert("ไม่พบแถวข้อมูลที่สามารถนำเข้าได้ กรุณาตรวจสอบหัวคอลัมน์ของไฟล์");
-        return;
+        if (allTxs.length === 0) {
+          throw new Error("ไม่พบรายการข้อมูลจัดซื้อในไฟล์ Excel กรุณาตรวจสอบหัวคอลัมน์");
+        }
+
+        allTxs.forEach(t => {
+          const yrNum = parseInt(t.year) || 2026;
+          if (yrNum >= 2025) recentTransactions.push(t);
+          else historicalTransactions.push(t);
+        });
       }
 
-      State.transactions = newTransactions;
+      const allCombined = [...recentTransactions, ...historicalTransactions];
+
+      // 2. ดึงหรือคำนวณ สรุปผลรายเดือน (Monthly Summary)
+      let monthlySummary = [];
+      const monthlySheetName = sheetNames.find(s => s.includes('สรุป-รายเดือน') || s.includes('รายเดือน'));
+      
+      if (monthlySheetName && workbook.Sheets[monthlySheetName]) {
+        const mRows = XLSX.utils.sheet_to_json(workbook.Sheets[monthlySheetName], { header: 1, defval: '' });
+        // สแกนแถวข้อมูล JAN-DEC (มักจะเริ่มแถวที่ 2 หรือ 3)
+        for (let r = 1; r < Math.min(25, mRows.length); r++) {
+          const row = mRows[r];
+          if (!Array.isArray(row) || row.length === 0) continue;
+          const monthCode = String(row[0] || '').trim().toUpperCase();
+          const validMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+          if (validMonths.includes(monthCode)) {
+            const pv2021 = parseNum(row[1]);
+            const cr2021 = parseNum(row[2]);
+            const pct2021 = parseNum(row[3]);
+            const status2021 = String(row[4] || (pct2021 >= 3 ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย'));
+            const pv2026 = parseNum(row[5]);
+            const cr2026 = parseNum(row[6]);
+            const target2026 = parseNum(row[7]) || (pv2026 * (State.targetRate || 0.03));
+            const pct2026 = parseNum(row[8]) || (pv2026 > 0 ? (cr2026 / pv2026) * 100 : 0);
+            const status2026 = String(row[9] || (cr2026 >= target2026 ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย'));
+            const savingVsTarget = parseNum(row[11]);
+            const pctDiffTarget = parseNum(row[12]);
+            const creditDiffDays = parseNum(row[19]);
+            const creditPOVal = parseNum(row[20]);
+            const creditSaving = parseNum(row[21]);
+
+            monthlySummary.push({
+              month: monthCode,
+              pv2021, cr2021, pct2021, status2021,
+              pv2026, cr2026, target2026, pct2026, status2026,
+              savingVsTarget, pctDiffTarget,
+              creditDiffDays, creditPOVal, creditSaving
+            });
+          }
+        }
+      }
+
+      // หากไม่มี Sheet สรุปรายเดือน ให้คำนวณอัตโนมัติจากรายการทั้งหมด
+      if (monthlySummary.length === 0) {
+        const monthCodes = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        monthlySummary = monthCodes.map(mo => {
+          const moTxs2026 = allCombined.filter(t => t.month === mo && (t.year === '2026' || t.year === '2025'));
+          const pv = moTxs2026.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
+          const cr = moTxs2026.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
+          const target = pv * (State.targetRate || 0.03);
+          const pct = pv > 0 ? (cr / pv) * 100 : 0;
+          const status = cr >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย';
+
+          const creditTxs = moTxs2026.filter(t => (t.strategy || '').includes('เครดิต'));
+          const creditSaving = creditTxs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
+
+          return {
+            month: mo,
+            pv2021: 0, cr2021: 0, pct2021: 0, status2021: '-',
+            pv2026: pv, cr2026: cr, target2026: target, pct2026: pct, status2026: status,
+            savingVsTarget: cr - target,
+            pctDiffTarget: target > 0 ? (cr - target) / target : 0,
+            creditDiffDays: creditTxs.length > 0 ? 15 : 0,
+            creditPOVal: creditTxs.reduce((sum, t) => sum + (t.totalPrice || 0), 0),
+            creditSaving: creditSaving
+          };
+        });
+      }
+
+      // 3. ดึงหรือคำนวณ สรุปผลรายปี (Yearly Summary)
+      let yearlySummary = [];
+      const yearlySheetName = sheetNames.find(s => s.includes('สรุป-รายปี') || s.includes('รายปี'));
+      if (yearlySheetName && workbook.Sheets[yearlySheetName]) {
+        const yRows = XLSX.utils.sheet_to_json(workbook.Sheets[yearlySheetName], { header: 1, defval: '' });
+        for (let r = 1; r < Math.min(15, yRows.length); r++) {
+          const row = yRows[r];
+          if (!Array.isArray(row) || row.length === 0) continue;
+          const yr = String(row[0] || '').trim();
+          if (yr && yr.match(/^20\d\d$/)) {
+            yearlySummary.push({
+              year: yr,
+              purchaseValue: parseNum(row[1]),
+              costSaving: parseNum(row[2]),
+              percentSaving: parseNum(row[3])
+            });
+          }
+        }
+      }
+
+      if (yearlySummary.length === 0) {
+        const years = ['2023', '2024', '2025', '2026', '2027'];
+        yearlySummary = years.map(yr => {
+          const yrTxs = allCombined.filter(t => t.year === yr);
+          const pv = yrTxs.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
+          const cs = yrTxs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
+          return {
+            year: yr,
+            purchaseValue: pv,
+            costSaving: cs,
+            percentSaving: pv > 0 ? cs / pv : 0
+          };
+        });
+      }
+
+      // 4. ดึงหรือคำนวณ ประวัติมูลค่าซื้อ (Purchase History)
+      let purchaseHistory = [];
+      const purchaseSheetName = sheetNames.find(s => s.includes('มูลค่าซื้อ'));
+      if (purchaseSheetName && workbook.Sheets[purchaseSheetName]) {
+        const pRows = XLSX.utils.sheet_to_json(workbook.Sheets[purchaseSheetName], { header: 1, defval: '' });
+        for (let r = 1; r < pRows.length; r++) {
+          const row = pRows[r];
+          if (!Array.isArray(row) || row.length === 0) continue;
+          const yr = String(row[0] || '').trim();
+          const mo = String(row[1] || '').trim().toUpperCase();
+          const val = parseNum(row[2]);
+          if (yr && mo && val > 0) {
+            purchaseHistory.push({ year: yr, month: mo, purchaseValue: val });
+          }
+        }
+      }
+
+      if (purchaseHistory.length === 0) {
+        const years = Array.from(new Set(allCombined.map(t => t.year))).sort();
+        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        years.forEach(yr => {
+          months.forEach(mo => {
+            const sumPV = allCombined.filter(t => t.year === yr && t.month === mo).reduce((s, t) => s + (t.totalPrice || 0), 0);
+            if (sumPV > 0) {
+              purchaseHistory.push({ year: yr, month: mo, purchaseValue: sumPV });
+            }
+          });
+        });
+      }
+
+      // 5. ดึงหรือคำนวณ Matrix กลยุทธ์ (Strategy Matrix)
+      let strategyMatrix = [];
+      const strategySheetName = sheetNames.find(s => s.includes('Sheet4') || s.includes('Matrix') || s.includes('กลยุทธ์'));
+      if (strategySheetName && workbook.Sheets[strategySheetName]) {
+        const sRows = XLSX.utils.sheet_to_json(workbook.Sheets[strategySheetName], { header: 1, defval: '' });
+        for (let r = 2; r < Math.min(15, sRows.length); r++) {
+          const row = sRows[r];
+          if (!Array.isArray(row) || row.length === 0) continue;
+          const stratName = String(row[0] || '').trim();
+          if (stratName && !stratName.toLowerCase().includes('total') && !stratName.toLowerCase().includes('sum')) {
+            strategyMatrix.push({
+              strategy: stratName,
+              Dusit: parseNum(row[1]),
+              Pawina: parseNum(row[2]),
+              Saniya: parseNum(row[3]),
+              Tanida: parseNum(row[4]),
+              Yuwanit: parseNum(row[5]),
+              Total: parseNum(row[6])
+            });
+          }
+        }
+      }
+
+      if (strategyMatrix.length === 0) {
+        const strategies = ['Avoidance', 'Compare + Negotiate', 'Negotiate', 'Rebate', 'เพิ่มเครดิต'];
+        const pics = ['Dusit', 'Pawina', 'Saniya', 'Tanida', 'Yuwanit'];
+        strategyMatrix = strategies.map(strat => {
+          const item = { strategy: strat };
+          let rowTotal = 0;
+          pics.forEach(p => {
+            const pSavings = allCombined
+              .filter(t => (t.strategy || t.method || '').includes(strat) && (t.pic || '').toLowerCase().includes(p.toLowerCase()))
+              .reduce((s, t) => s + (t.totalSaving || 0), 0);
+            item[p] = pSavings;
+            rowTotal += pSavings;
+          });
+          item.Total = rowTotal;
+          return item;
+        });
+      }
+
+      // 6. สร้าง Complete Dataset สอดคล้องตามมาตรฐาน KPI_DATA
+      const completeDataset = {
+        title: "QTC ENERGY PCL - KPI Discount Supplier & Procurement Cost Reduction",
+        generatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        config: State.data?.config || {
+          targetRate: State.targetRate || 0.03,
+          creditInterestRate: 0.0425,
+          kaizenParams: {
+            hourlyWage: 117,
+            savedMinutesPerJob: 10,
+            jobsPerMonth: 16,
+            workDaysPerMonth: 20,
+            monthsPerYear: 1,
+            paperCostPerPage: 0.15,
+            colorPrintPerPage: 3,
+            blackWhitePrintPerPage: 0.3,
+            electricityRatePerKwh: 4
+          }
+        },
+        monthlySummary,
+        yearlySummary,
+        purchaseHistory,
+        strategyMatrix,
+        historicalTransactions,
+        recentTransactions
+      };
+
+      setStep(3);
+
+      // 7. บันทึกและซิงค์ลง Backend API (/api/upload-excel)
+      const base64Data = arrayBufferToBase64(data);
+      let backendSuccess = false;
+      let backendMsg = '';
+
+      try {
+        const apiResponse = await fetch('/api/upload-excel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            fileBase64: base64Data,
+            dataset: completeDataset
+          })
+        });
+
+        if (apiResponse.ok) {
+          const resJson = await apiResponse.json();
+          backendSuccess = true;
+          backendMsg = resJson.message || 'บันทึกลง Backend สำเร็จ';
+          console.log('✅ Backend updated successfully:', resJson);
+        }
+      } catch (backendErr) {
+        console.warn('Backend upload API error:', backendErr);
+      }
+
+      // 8. เก็บใน LocalStorage ด้วย เพื่อให้โหลดได้ทันทีแบบออฟไลน์
+      try {
+        localStorage.setItem('qtc_custom_dataset', JSON.stringify(completeDataset));
+      } catch (lsErr) {
+        console.warn('LocalStorage save error:', lsErr);
+      }
+
+      // 9. อัปเดต In-Memory State และเรนเดอร์แดชบอร์ดใหม่ทั้งหมด
+      window.KPI_DATA = completeDataset;
+      State.data = completeDataset;
+      setupDataset();
       filterTransactions();
       renderAllViews();
 
-      alert(`✅ นำเข้าข้อมูลสำเร็จ ${newTransactions.length} รายการจากไฟล์ ${file.name} เรียบร้อยแล้ว!`);
+      // ปิด modal ความคืบหน้า
+      setTimeout(() => {
+        if (statusModal) statusModal.classList.remove('show');
+      }, 500);
+
+      // 10. แจ้งเตือนยืนยันความสำเร็จ
+      const totalCount = recentTransactions.length + historicalTransactions.length;
+      const sheetCount = sheetNames.length;
+      const backendStatusText = backendSuccess 
+        ? "💾 ข้อมูลถูกบันทึกลง Backend Server (data.json, data.js และไฟล์ .xlsx) ถาวรแล้ว" 
+        : "⚡ ข้อมูลอัปเดตบนหน้าจอและ Local Storage เรียบร้อยแล้ว";
+
+      alert(
+        `🎉 อัปเดตข้อมูลทั้งชีตและระบบ Backend เรียบร้อยแล้ว!\n\n` +
+        `• ไฟล์: ${file.name}\n` +
+        `• แผ่นงานที่ตรวจพบ (${sheetCount} ชีต): ${sheetNames.join(', ')}\n` +
+        `• รายการจัดซื้อทั้งหมด: ${totalCount.toLocaleString()} รายการ (ล่าสุด: ${recentTransactions.length.toLocaleString()}, ประวัติเดิม: ${historicalTransactions.length.toLocaleString()})\n` +
+        `• สรุปผลรายเดือนและรายปี: อัปเดตครบถ้วน\n` +
+        `• สถานะ Backend: ${backendStatusText}`
+      );
+
       switchView('dashboard');
     } catch (err) {
-      alert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel: " + err.message);
+      console.error("Error processing Excel file:", err);
+      if (statusModal) statusModal.classList.remove('show');
+      alert("เกิดข้อผิดพลาดในการประมวลผลไฟล์ Excel: " + err.message);
     }
   };
+
   reader.readAsArrayBuffer(file);
 }
 

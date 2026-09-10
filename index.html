@@ -22,6 +22,52 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Full-screen Drag and Drop Overlay for dropping Excel file anywhere -->
+  <div id="global-dropzone-overlay" class="global-dropzone-overlay">
+    <div class="global-dropzone-content">
+      <div class="global-dropzone-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <h3 class="global-dropzone-title">ปล่อยไฟล์ Excel (.xlsx) ที่นี่</h3>
+      <p class="global-dropzone-subtitle">
+        ระบบจะอ่านและประมวลผลข้อมูลครบทุกชีต (Data, Improve#1, สรุปรายเดือน, สรุปรายปี, มูลค่าซื้อ) พร้อมอัปเดตและบันทึกลง Backend ทันที
+      </p>
+      <div class="global-dropzone-badges">
+        <span class="global-dropzone-badge">⚡ อัปเดตทุกชีตอัตโนมัติ</span>
+        <span class="global-dropzone-badge">💾 บันทึกลง Backend</span>
+        <span class="global-dropzone-badge">📊 คำนวณ KPI ทันที</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal แสดงความคืบหน้าการอ่านและบันทึกไฟล์ Excel -->
+  <div id="upload-status-modal" class="upload-status-modal">
+    <div class="upload-status-card">
+      <div class="upload-spinner"></div>
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 8px 0;" id="upload-status-title">
+        กำลังประมวลผลไฟล์ Excel...
+      </h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0;" id="upload-status-desc">
+        กำลังอ่านและจัดระเบียบข้อมูลจากทุกชีตในไฟล์
+      </p>
+      <div class="upload-status-steps">
+        <div class="upload-step-item" id="upload-step-1">
+          <span>📄</span> <span id="step-1-text">1. อ่านโครงสร้างเวิร์กบุ๊กและข้อมูลทุกชีต</span>
+        </div>
+        <div class="upload-step-item" id="upload-step-2">
+          <span>⚙️</span> <span id="step-2-text">2. ประมวลผลรายการจัดซื้อและคำนวณ KPI ทั้งหมด</span>
+        </div>
+        <div class="upload-step-item" id="upload-step-3">
+          <span>💾</span> <span id="step-3-text">3. ซิงค์และบันทึกลง Backend (data.json & .xlsx)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="app-layout">
     <!-- แถบเมนูด้านข้าง (Sidebar) -->
     <aside class="sidebar" id="sidebar">
@@ -800,16 +846,19 @@
           <div class="card-box" style="margin-bottom: 20px;">
             <div class="card-header-bar">
               <div>
-                <div class="card-header-title">อัปโหลดไฟล์ Excel (.xlsx) แบบออฟไลน์</div>
-                <div class="card-header-sub">ลากและวางไฟล์ข้อมูลชุดใหม่เพื่อประมวลผลบนแดชบอร์ดทันที (ประมวลผลในเครื่อง ปลอดภัย 100%)</div>
+                <div class="card-header-title">อัปโหลดไฟล์ Excel (.xlsx) เพื่ออัปเดตทุกชีตและระบบ Backend</div>
+                <div class="card-header-sub">ลากและวางไฟล์ข้อมูลชุดใหม่เพื่อประมวลผลทุกชีต (Data, Improve#1, สรุปรายเดือน, สรุปรายปี) และบันทึกลง Backend อัตโนมัติ</div>
               </div>
+              <span class="tier-tag" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3); font-weight: 600;">
+                ⚡ รองรับการลากไฟล์วางได้ทุกที่ในหน้าจอ
+              </span>
             </div>
 
             <div class="dropzone-container" id="excel-dropzone">
               <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display: none;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <h4 style="font-size: 14px; font-weight: 600;">ลากและวางไฟล์ Excel (.xlsx) ที่นี่ หรือคลิกเพื่อเลือกไฟล์</h4>
-              <p style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">รองรับไฟล์ Excel มาตรฐาน KPI-Discount Supplier</p>
+              <h4 style="font-size: 15px; font-weight: 600;">ลากและวางไฟล์ Excel (.xlsx) ที่นี่ หรือคลิกเพื่อเลือกไฟล์</h4>
+              <p style="color: var(--text-muted); font-size: 12.5px; margin-top: 4px;">รองรับไฟล์ Excel ของ QTC (ทุกชีต: Data, Improve#1, สรุปรายเดือน, สรุปรายปี, มูลค่าซื้อ) — ประมวลผลและซิงค์ลง Backend ทันที</p>
             </div>
           </div>
 
