@@ -1626,11 +1626,11 @@ function filterTransactions() {
   }
 
   if (State.filters.pic !== 'ALL') {
-    list = list.filter(t => t.pic.toLowerCase().includes(State.filters.pic.toLowerCase()));
+    list = list.filter(t => (t.pic || '').toLowerCase().includes(State.filters.pic.toLowerCase()));
   }
 
   if (State.filters.strategy !== 'ALL') {
-    list = list.filter(t => t.strategy.toLowerCase().includes(State.filters.strategy.toLowerCase()));
+    list = list.filter(t => (t.strategy || '').toLowerCase().includes(State.filters.strategy.toLowerCase()));
   }
 
   if (State.filters.search) {
@@ -2665,17 +2665,17 @@ async function handleUploadedExcel(file) {
 function exportFilteredTransactions() {
   const headers = ["เดือน", "เลขที่ PO", "ชื่อซัพพลายเออร์", "รายละเอียดสินค้า/บริการ", "จำนวน", "หน่วย", "ราคารวม (บาท)", "รวมที่ต่อรองได้ (บาท)", "% ส่วนลด", "กลยุทธ์", "ผู้รับผิดชอบ"];
   const rows = State.filteredTransactions.map(t => [
-    THAI_MONTHS[t.month] || t.month,
-    `"${t.poNo}"`,
+    THAI_MONTHS[t.month] || t.month || '-',
+    `"${(t.poNo || '').replace(/"/g, '""')}"`,
     `"${(t.supplier || '').replace(/"/g, '""')}"`,
     `"${(t.description || '').replace(/"/g, '""')}"`,
-    t.qty,
-    t.unit,
-    t.totalPrice,
-    t.totalSaving,
-    (t.percentDiscount * 100).toFixed(2) + '%',
-    `"${THAI_STRATEGIES[t.strategy] || t.strategy}"`,
-    `"${THAI_PIC_NAMES[t.pic] || t.pic}"`
+    t.qty || 0,
+    `"${(t.unit || '').replace(/"/g, '""')}"`,
+    t.totalPrice || 0,
+    t.totalSaving || 0,
+    ((t.percentDiscount || 0) * 100).toFixed(2) + '%',
+    `"${(THAI_STRATEGIES[t.strategy] || t.strategy || '').replace(/"/g, '""')}"`,
+    `"${(THAI_PIC_NAMES[t.pic] || t.pic || '').replace(/"/g, '""')}"`
   ]);
 
   downloadCSV("รายงานรายการส่วนลดจัดซื้อ.csv", headers, rows);

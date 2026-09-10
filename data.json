@@ -1,6 +1,6 @@
 {
   "title": "QTC ENERGY PCL - KPI Discount Supplier & Procurement Cost Reduction",
-  "generatedAt": "2026-09-10T04:28:50.914Z",
+  "generatedAt": "2026-09-10T05:05:59.520Z",
   "config": {
     "targetRate": 0.03,
     "creditInterestRate": 0.0425,
@@ -14,7 +14,9 @@
       "colorPrintPerPage": 3,
       "blackWhitePrintPerPage": 0.3,
       "electricityRatePerKwh": 4
-    }
+    },
+    "gsheetUrl": "",
+    "gsheetAutoSync": false
   },
   "monthlySummary": [
     {

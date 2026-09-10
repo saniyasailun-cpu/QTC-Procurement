@@ -145,6 +145,21 @@ async function startServer() {
         const jsonPath = path.join(process.cwd(), "data.json");
         const jsPath = path.join(process.cwd(), "data.js");
 
+        // รักษาการตั้งค่าเดิม (เช่น gsheetUrl, targetRate) ไว้เสมอ
+        if (fs.existsSync(jsonPath)) {
+          try {
+            const existing = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+            if (existing.config) {
+              dataset.config = {
+                ...existing.config,
+                ...dataset.config,
+                gsheetUrl: existing.config.gsheetUrl || dataset.config?.gsheetUrl || "",
+                gsheetAutoSync: existing.config.gsheetAutoSync ?? dataset.config?.gsheetAutoSync ?? false,
+              };
+            }
+          } catch (e) {}
+        }
+
         fs.writeFileSync(jsonPath, JSON.stringify(dataset, null, 2), "utf8");
         fs.writeFileSync(jsPath, `window.KPI_DATA = ${JSON.stringify(dataset)};`, "utf8");
         savedData = true;
