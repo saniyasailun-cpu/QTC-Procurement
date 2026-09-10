@@ -161,7 +161,7 @@ const PIC_COLOR_MAP = {
 };
 
 // เริ่มต้นการทำงานเมื่อโหลดหน้าเสร็จ
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // โหลดเป้าหมายที่บันทึกไว้
   const savedRate = localStorage.getItem('qtc_target_rate');
   const rateInput = document.getElementById('target-rate-input');
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTheme();
   initGoals();
-  loadData();
+  await loadData();
   initNavigation();
   initFilterPills();
   initTableEvents();
@@ -228,17 +228,23 @@ function updateThemeIcons() {
 
 // โหลดข้อมูล
 async function loadData() {
-  // 1. ตรวจสอบข้อมูลล่าสุดจาก Backend API (/api/data) เป็นอันดับแรก
+  // 1. ตรวจสอบข้อมูลล่าสุดจาก Backend API (/api/data) เป็นอันดับแรก (ป้องกันแคชเบราว์เซอร์ 100%)
   try {
-    const res = await fetch('/api/data', { cache: 'no-cache' });
+    const res = await fetch(`/api/data?_t=${Date.now()}`, { 
+      cache: 'no-store',
+      headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+    });
     if (res.ok) {
       const json = await res.json();
       if (json && (json.recentTransactions || json.historicalTransactions)) {
         window.KPI_DATA = json;
         State.data = json;
+        try {
+          localStorage.setItem('qtc_custom_dataset', JSON.stringify(json));
+        } catch (e) {}
         setupDataset();
         renderAllViews();
-        console.log('✅ โหลดข้อมูลล่าสุดจาก Backend สำเร็จ');
+        console.log('✅ โหลดข้อมูลชุดล่าสุดจาก Backend ถาวรสำเร็จ (ทุกคนเห็นข้อมูลเดียวกัน)');
         return;
       }
     }
@@ -274,7 +280,7 @@ async function loadData() {
 
   // 4. กรณี window.KPI_DATA ยังไม่โหลด (เช่น บน GitHub Pages หรือโฮสต์ภายนอก)
   try {
-    const res = await fetch('data.json');
+    const res = await fetch(`data.json?_t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
       const json = await res.json();
       window.KPI_DATA = json;
@@ -2556,30 +2562,59 @@ async function handleUploadedExcel(file) {
       setStep(3);
 
       // 7. บันทึกและซิงค์ลง Backend API (/api/upload-excel)
-      const base64Data = arrayBufferToBase64(data);
       let backendSuccess = false;
       let backendMsg = '';
 
       try {
+        // ส่งไฟล์ Binary ตัวจริงขึ้น Backend (ขนาดกะทัดรัดเพียง ~900KB รวดเร็ว และบันทึกไฟล์ .xlsx / data.json / data.js บน Server ถาวร)
         const apiResponse = await fetch('/api/upload-excel', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            fileBase64: base64Data,
-            dataset: completeDataset
-          })
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Filename': encodeURIComponent(file.name)
+          },
+          body: data
         });
 
         if (apiResponse.ok) {
           const resJson = await apiResponse.json();
           backendSuccess = true;
           backendMsg = resJson.message || 'บันทึกลง Backend สำเร็จ';
-          console.log('✅ Backend updated successfully:', resJson);
+          if (resJson.dataset) {
+            completeDataset = resJson.dataset;
+          }
+          console.log('✅ Backend updated permanently with binary file:', resJson);
+        } else {
+          // หาก Binary API มีปัญหา ให้ลองส่งแบบ JSON Fallback
+          const base64Data = arrayBufferToBase64(data);
+          const fallbackRes = await fetch('/api/upload-excel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              fileBase64: base64Data,
+              dataset: completeDataset
+            })
+          });
+          if (fallbackRes.ok) {
+            backendSuccess = true;
+          }
         }
       } catch (backendErr) {
         console.warn('Backend upload API error:', backendErr);
       }
+
+      // ปิดการทำงาน Google Sheet auto-sync เพื่อให้ไฟล์ Excel เป็น Source of Truth ถาวร
+      try {
+        localStorage.setItem(GSHEET_STORAGE_KEY, JSON.stringify({ url: '', autoSync: false }));
+        const autoSyncCheck = document.getElementById('gsheet-auto-sync');
+        if (autoSyncCheck) autoSyncCheck.checked = false;
+        const badge = document.getElementById('gsheet-status-badge');
+        if (badge) {
+          badge.textContent = `💾 ข้อมูลซิงค์กับเซิร์ฟเวอร์หลักแล้ว`;
+          badge.className = 'tier-tag tier-high';
+        }
+      } catch (e) {}
 
       // 8. เก็บใน LocalStorage ด้วย เพื่อให้โหลดได้ทันทีแบบออฟไลน์
       try {
@@ -2604,7 +2639,7 @@ async function handleUploadedExcel(file) {
       const totalCount = recentTransactions.length + historicalTransactions.length;
       const sheetCount = sheetNames.length;
       const backendStatusText = backendSuccess 
-        ? "💾 ข้อมูลถูกบันทึกลง Backend Server (data.json, data.js และไฟล์ .xlsx) ถาวรแล้ว" 
+        ? "💾 ข้อมูลถูกบันทึกลง Backend Server (data.json, data.js และไฟล์ .xlsx) ถาวรแล้ว ทุกคนที่เปิดเว็บจะเห็นข้อมูลชุดนี้ร่วมกันทันที" 
         : "⚡ ข้อมูลอัปเดตบนหน้าจอและ Local Storage เรียบร้อยแล้ว";
 
       alert(
@@ -2613,7 +2648,7 @@ async function handleUploadedExcel(file) {
         `• แผ่นงานที่ตรวจพบ (${sheetCount} ชีต): ${sheetNames.join(', ')}\n` +
         `• รายการจัดซื้อทั้งหมด: ${totalCount.toLocaleString()} รายการ (ล่าสุด: ${recentTransactions.length.toLocaleString()}, ประวัติเดิม: ${historicalTransactions.length.toLocaleString()})\n` +
         `• สรุปผลรายเดือนและรายปี: อัปเดตครบถ้วน\n` +
-        `• สถานะ Backend: ${backendStatusText}`
+        `• สถานะการบันทึก: ${backendStatusText}`
       );
 
       switchView('dashboard');
@@ -2699,6 +2734,54 @@ window.exportFullTransactionsJSON = function() {
   URL.revokeObjectURL(url);
 };
 
+window.downloadServerExcel = function() {
+  const link = document.createElement('a');
+  link.href = '/api/download-excel';
+  link.download = '2026 KPI-Discount Supplier.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+window.refreshLatestData = async function(showFeedback = true) {
+  const topbarLabel = document.getElementById('topbar-sync-label');
+  if (topbarLabel) topbarLabel.textContent = 'กำลังโหลด...';
+
+  try {
+    const res = await fetch(`/api/data?_t=${Date.now()}`, { 
+      cache: 'no-store',
+      headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && (json.recentTransactions || json.historicalTransactions)) {
+        window.KPI_DATA = json;
+        State.data = json;
+        try { localStorage.setItem('qtc_custom_dataset', JSON.stringify(json)); } catch (e) {}
+        setupDataset();
+        renderAllViews();
+
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
+        if (topbarLabel) topbarLabel.textContent = `อัปเดต (${timeStr})`;
+        
+        const total = (json.recentTransactions?.length || 0) + (json.historicalTransactions?.length || 0);
+        if (showFeedback) {
+          alert(`✅ โหลดข้อมูลชุดล่าสุดจากเซิร์ฟเวอร์สำเร็จ!\nจำนวนรายการสั่งซื้อทั้งหมด: ${total.toLocaleString()} รายการ\nทุกคนที่เปิดเว็บนี้จะเห็นข้อมูลชุดเดียวกัน`);
+        }
+        return;
+      }
+    }
+    throw new Error('ไม่พบชุดข้อมูลล่าสุดจาก Backend');
+  } catch (err) {
+    console.warn('refreshLatestData error:', err);
+    if (topbarLabel) topbarLabel.textContent = 'ซิงค์ไม่สำเร็จ';
+    if (showFeedback) {
+      alert(`⚠️ ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้: ${err.message}\nระบบกำลังใช้งานข้อมูลที่แคชไว้ในเครื่อง`);
+    }
+  }
+};
+
 function downloadCSV(filename, headers, rows) {
   const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2725,7 +2808,7 @@ const DEFAULT_GSHEET_URL = 'https://docs.google.com/spreadsheets/d/1iVgKgCdQRCz4
 
 function initGoogleSheetSync() {
   const saved = localStorage.getItem(GSHEET_STORAGE_KEY);
-  let config = { url: DEFAULT_GSHEET_URL, autoSync: true };
+  let config = { url: '', autoSync: false };
 
   if (saved) {
     try {
@@ -2738,18 +2821,23 @@ function initGoogleSheetSync() {
   const urlInput = document.getElementById('gsheet-url-input');
   const autoSyncCheck = document.getElementById('gsheet-auto-sync');
 
-  if (urlInput) urlInput.value = config.url || DEFAULT_GSHEET_URL;
+  if (urlInput) urlInput.value = config.url || '';
   if (autoSyncCheck && config.autoSync !== undefined) autoSyncCheck.checked = config.autoSync;
 
   const badge = document.getElementById('gsheet-status-badge');
   if (badge) {
-    badge.textContent = `🟢 เชื่อมต่อ QTC Sheet สด`;
-    badge.className = 'tier-tag tier-high';
+    if (config.autoSync && config.url && config.url.trim() !== '') {
+      badge.textContent = `🟢 ซิงค์อัตโนมัติจาก Google Sheet`;
+      badge.className = 'tier-tag tier-high';
+    } else {
+      badge.textContent = `💾 ข้อมูลพร้อมใช้งาน (Backend Persistent)`;
+      badge.className = 'tier-tag tier-high';
+    }
   }
 
-  // ดึงข้อมูลสดจาก Google Sheet อัตโนมัติทันทีที่เปิดเว็บ
-  if (config.autoSync) {
-    console.log('🔄 Auto-syncing live from embedded Google Sheet...');
+  // ดึงข้อมูลสดจาก Google Sheet เฉพาะเมื่อผู้ใช้ระบุ URL และเปิด Auto-sync ไว้อย่างชัดเจนเท่านั้น
+  if (config.autoSync && config.url && config.url.trim() !== '') {
+    console.log('🔄 Auto-syncing live from configured Google Sheet...');
     syncGoogleSheetNow(false);
   }
 }

@@ -167,10 +167,10 @@
             <button class="pill-btn" data-quarter="Q4">Q4</button>
           </div>
 
-          <!-- ปุ่มซิงค์ข้อมูล Google Sheet ด่วน -->
-          <button class="pill-btn" id="topbar-sync-btn" onclick="syncGoogleSheetNow()" title="ซิงค์ข้อมูลล่าสุดจาก Google Sheets" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 4px;">
+          <!-- ปุ่มซิงค์/รีเฟรชข้อมูลเซิร์ฟเวอร์ด่วน -->
+          <button class="pill-btn" id="topbar-sync-btn" onclick="refreshLatestData(true)" title="โหลดข้อมูลล่าสุดจากเซิร์ฟเวอร์หลัก (Server Sync)" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 4px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span id="topbar-sync-label">ซิงค์สด</span>
+            <span id="topbar-sync-label">ซิงค์เซิร์ฟเวอร์</span>
           </button>
 
           <!-- พิมพ์รายงานด่วน -->
@@ -907,12 +907,20 @@
           <div class="card-box">
             <div class="card-header-bar">
               <div>
-                <div class="card-header-title">ส่งออกชุดข้อมูล (Export Data)</div>
-                <div class="card-header-sub">ดาวน์โหลดข้อมูลรายการสั่งซื้อและสถิติ KPI</div>
+                <div class="card-header-title">ดาวน์โหลดและส่งออกชุดข้อมูล (Export & Download)</div>
+                <div class="card-header-sub">ดาวน์โหลดไฟล์ Excel ต้นฉบับที่เซิร์ฟเวอร์ใช้งานอยู่ หรือดาวน์โหลดข้อมูลในรูปแบบ JSON/CSV</div>
               </div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button class="btn-action btn-action-primary" onclick="exportFullTransactionsJSON()">
+              <button class="btn-action btn-action-primary" onclick="downloadServerExcel()" style="background: linear-gradient(135deg, #10b981, #059669); border: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ดาวน์โหลดไฟล์ Excel ล่าสุด (.xlsx)
+              </button>
+              <button class="btn-action btn-action-secondary" onclick="refreshLatestData(true)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                ดึงข้อมูลล่าสุดจาก Backend เดี๋ยวนี้
+              </button>
+              <button class="btn-action btn-action-secondary" onclick="exportFullTransactionsJSON()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 ดาวน์โหลด JSON Dataset
               </button>

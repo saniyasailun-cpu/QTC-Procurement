@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
 import {defineConfig, Plugin} from 'vite';
+import { parseExcelWorkbook } from './src/excelParser';
 
 function backendApiPlugin(): Plugin {
   return {
@@ -15,12 +16,14 @@ function backendApiPlugin(): Plugin {
           return;
         }
 
-        if (req.url === '/api/data' && req.method === 'GET') {
+        if (req.url?.startsWith('/api/data') && req.method === 'GET') {
           try {
             const dataPath = path.join(process.cwd(), 'data.json');
             if (fs.existsSync(dataPath)) {
-              res.setHeader('Content-Type', 'application/json');
-              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+              res.setHeader('Pragma', 'no-cache');
+              res.setHeader('Expires', '0');
               fs.createReadStream(dataPath).pipe(res);
               return;
             }
@@ -33,23 +36,65 @@ function backendApiPlugin(): Plugin {
           return;
         }
 
+        if (req.url === '/api/download-excel' && req.method === 'GET') {
+          try {
+            const filePath = path.join(process.cwd(), '2026 KPI-Discount Supplier.xlsx');
+            if (fs.existsSync(filePath)) {
+              res.setHeader('Content-Disposition', 'attachment; filename="2026 KPI-Discount Supplier.xlsx"');
+              res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+              fs.createReadStream(filePath).pipe(res);
+              return;
+            }
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'Excel file not found' }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
         if (req.url === '/api/upload-excel' && req.method === 'POST') {
-          let body = '';
-          req.on('data', chunk => { body += chunk; });
+          const chunks: Buffer[] = [];
+          req.on('data', chunk => { chunks.push(Buffer.from(chunk)); });
           req.on('end', () => {
             try {
-              const { filename, fileBase64, dataset } = JSON.parse(body);
+              const fullBuffer = Buffer.concat(chunks);
+              let buffer: Buffer | null = null;
+              let filename = '2026 KPI-Discount Supplier.xlsx';
+              let dataset: any = null;
+
+              const contentType = req.headers['content-type'] || '';
+              if (contentType.includes('json')) {
+                const parsed = JSON.parse(fullBuffer.toString('utf8'));
+                if (parsed.fileBase64) buffer = Buffer.from(parsed.fileBase64, 'base64');
+                if (parsed.filename) filename = parsed.filename;
+                if (parsed.dataset) dataset = parsed.dataset;
+              } else {
+                buffer = fullBuffer;
+                const rawFilename = req.headers['x-filename'];
+                if (rawFilename && typeof rawFilename === 'string') {
+                  try { filename = decodeURIComponent(rawFilename); } catch (e) { filename = rawFilename; }
+                }
+              }
+
               let savedFile = false;
               let savedData = false;
 
-              if (fileBase64) {
-                const buffer = Buffer.from(fileBase64, 'base64');
-                const targetFilename = filename || '2026 KPI-Discount Supplier.xlsx';
-                fs.writeFileSync(path.join(process.cwd(), targetFilename), buffer);
-                if (targetFilename !== '2026 KPI-Discount Supplier.xlsx') {
+              if (buffer && buffer.length > 0) {
+                fs.writeFileSync(path.join(process.cwd(), filename), buffer);
+                if (filename !== '2026 KPI-Discount Supplier.xlsx') {
                   fs.writeFileSync(path.join(process.cwd(), '2026 KPI-Discount Supplier.xlsx'), buffer);
                 }
                 savedFile = true;
+
+                if (!dataset) {
+                  try {
+                    dataset = parseExcelWorkbook(buffer);
+                  } catch (pErr) {
+                    console.error('Vite plugin excel parse error:', pErr);
+                  }
+                }
               }
 
               if (dataset && typeof dataset === 'object') {
@@ -63,13 +108,14 @@ function backendApiPlugin(): Plugin {
               const totalRecent = dataset?.recentTransactions?.length || 0;
               const totalHistorical = dataset?.historicalTransactions?.length || 0;
 
-              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
               res.end(JSON.stringify({
                 success: true,
-                message: 'อัปเดตไฟล์ Excel และข้อมูลทั้งชีตลง Backend สำเร็จเรียบร้อยแล้ว',
+                message: 'อัปเดตไฟล์ Excel และข้อมูลทั้งชีตลง Backend สำเร็จเรียบร้อยแล้ว ทุกคนที่เปิดเว็บจะเห็นข้อมูลชุดใหม่นี้ร่วมกันทันที',
                 savedFile,
                 savedData,
                 timestamp: new Date().toISOString(),
+                dataset,
                 stats: {
                   totalTransactions: totalRecent + totalHistorical,
                   recentCount: totalRecent,
