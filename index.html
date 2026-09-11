@@ -158,13 +158,21 @@
             <button class="pill-btn" data-year="ALL">ทุกปี</button>
           </div>
 
-          <!-- ตัวกรองไตรมาส (Quarter Filters) -->
-          <div class="filter-pills" id="quarter-filter-group">
-            <button class="pill-btn active" data-quarter="ALL">ทั้งปี</button>
-            <button class="pill-btn" data-quarter="Q1">Q1</button>
-            <button class="pill-btn" data-quarter="Q2">Q2</button>
-            <button class="pill-btn" data-quarter="Q3">Q3</button>
-            <button class="pill-btn" data-quarter="Q4">Q4</button>
+          <!-- ตัวกรองเดือนจริง (Real Month Filters) -->
+          <div class="filter-pills" id="month-filter-group" title="เลือกกรองตามเดือนจริง (12 เดือน)">
+            <button class="pill-btn active" data-month="ALL">ทั้งปี</button>
+            <button class="pill-btn" data-month="JAN">ม.ค.</button>
+            <button class="pill-btn" data-month="FEB">ก.พ.</button>
+            <button class="pill-btn" data-month="MAR">มี.ค.</button>
+            <button class="pill-btn" data-month="APR">เม.ย.</button>
+            <button class="pill-btn" data-month="MAY">พ.ค.</button>
+            <button class="pill-btn" data-month="JUN">มิ.ย.</button>
+            <button class="pill-btn" data-month="JUL">ก.ค.</button>
+            <button class="pill-btn" data-month="AUG">ส.ค.</button>
+            <button class="pill-btn" data-month="SEP">ก.ย.</button>
+            <button class="pill-btn" data-month="OCT">ต.ค.</button>
+            <button class="pill-btn" data-month="NOV">พ.ย.</button>
+            <button class="pill-btn" data-month="DEC">ธ.ค.</button>
           </div>
 
           <!-- ปุ่มซิงค์/รีเฟรชข้อมูลเซิร์ฟเวอร์ด่วน -->
@@ -1012,13 +1020,21 @@
             </div>
 
             <div class="form-field-group">
-              <label for="goal-input-quarter">ขอบเขตไตรมาส</label>
-              <select id="goal-input-quarter">
+              <label for="goal-input-month">ขอบเขตเดือน</label>
+              <select id="goal-input-month">
                 <option value="ALL">ทั้งปี (Full Year)</option>
-                <option value="Q1">ไตรมาส 1 (Q1)</option>
-                <option value="Q2">ไตรมาส 2 (Q2)</option>
-                <option value="Q3">ไตรมาส 3 (Q3)</option>
-                <option value="Q4">ไตรมาส 4 (Q4)</option>
+                <option value="JAN">มกราคม (JAN)</option>
+                <option value="FEB">กุมภาพันธ์ (FEB)</option>
+                <option value="MAR">มีนาคม (MAR)</option>
+                <option value="APR">เมษายน (APR)</option>
+                <option value="MAY">พฤษภาคม (MAY)</option>
+                <option value="JUN">มิถุนายน (JUN)</option>
+                <option value="JUL">กรกฎาคม (JUL)</option>
+                <option value="AUG">สิงหาคม (AUG)</option>
+                <option value="SEP">กันยายน (SEP)</option>
+                <option value="OCT">ตุลาคม (OCT)</option>
+                <option value="NOV">พฤศจิกายน (NOV)</option>
+                <option value="DEC">ธันวาคม (DEC)</option>
               </select>
             </div>
           </div>
@@ -1068,7 +1084,7 @@
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
             <span class="goal-tag goal-tag-cat" id="gdetail-cat-badge">มูลค่าลดต้นทุน (THB)</span>
             <span class="goal-tag goal-tag-scope" id="gdetail-year-badge">ปี 2569 (2026)</span>
-            <span class="goal-tag goal-tag-scope" id="gdetail-quarter-badge">ทั้งปี</span>
+            <span class="goal-tag goal-tag-scope" id="gdetail-month-badge">ทั้งปี</span>
             <span class="goal-status-badge on-track" id="gdetail-status-badge">กำลังดำเนินการ</span>
           </div>
         </div>

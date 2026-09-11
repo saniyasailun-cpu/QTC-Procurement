@@ -162,7 +162,7 @@ export function parseExcelWorkbook(buffer: Buffer): any {
 
   if (monthlySummary.length === 0) {
     validMonths.forEach(mo => {
-      const moTxs = allCombined.filter(t => t.month === mo && (t.year === "2026" || t.year === "2025"));
+      const moTxs = allCombined.filter(t => t.month === mo && t.year === "2026");
       const pv = moTxs.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
       const cr = moTxs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
       const target = pv * 0.03;
@@ -171,7 +171,7 @@ export function parseExcelWorkbook(buffer: Buffer): any {
         month: mo,
         pv2021: 0, cr2021: 0, pct2021: 0, status2021: "-",
         pv2026: pv, cr2026: cr, target2026: target, pct2026: pct,
-        status2026: cr >= target ? "ได้ตามเป้าหมาย" : "ไม่ได้ตามเป้าหมาย",
+        status2026: pv > 0 ? (cr >= target ? "ได้ตามเป้าหมาย" : "ไม่ได้ตามเป้าหมาย") : "-",
         savingVsTarget: cr - target,
         pctDiffTarget: target > 0 ? (cr - target) / target : 0,
         creditDiffDays: 0, creditPOVal: 0, creditSaving: 0,

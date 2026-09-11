@@ -9,6 +9,7 @@
 const State = {
   data: null,
   activeYear: '2026',
+  activeMonth: 'ALL',
   activeQuarter: 'ALL',
   activeView: 'dashboard',
   chartMode: 'bar', // 'bar' | 'curve'
@@ -335,6 +336,27 @@ function setupDataset() {
   });
 
   filterTransactions();
+
+  // ป้องกันกรณีมีข้อมูลตกค้างของเดือนที่ยังไม่มีรายการสั่งซื้อจริงในปี 2026 (เช่น ก.ย. เป็นต้นไป)
+  if (State.data.monthlySummary) {
+    const active2026Months = new Set(
+      State.transactions.filter(t => t.year === '2026').map(t => t.month)
+    );
+    State.data.monthlySummary.forEach(ms => {
+      if (!active2026Months.has(ms.month)) {
+        ms.pv2026 = 0;
+        ms.cr2026 = 0;
+        ms.target2026 = 0;
+        ms.pct2026 = 0;
+        ms.status2026 = '-';
+        ms.savingVsTarget = 0;
+        ms.pctDiffTarget = 0;
+        ms.creditDiffDays = 0;
+        ms.creditPOVal = 0;
+        ms.creditSaving = 0;
+      }
+    });
+  }
 }
 
 // ระบบสลับเมนู
@@ -402,6 +424,17 @@ function initFilterPills() {
     });
   });
 
+  // ตัวกรองเดือนจริง (Real Month Filter Pills)
+  document.querySelectorAll('#month-filter-group .pill-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#month-filter-group .pill-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      State.activeMonth = btn.getAttribute('data-month');
+      renderAllViews();
+    });
+  });
+
+  // ตัวกรองไตรมาสเดิม (Fallback สำหรับชุดคำสั่งเดิม)
   document.querySelectorAll('#quarter-filter-group .pill-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#quarter-filter-group .pill-btn').forEach(b => b.classList.remove('active'));
@@ -412,13 +445,15 @@ function initFilterPills() {
   });
 }
 
-// ดึงรายการสั่งซื้อที่กรองตามปีและไตรมาสที่เลือก
+// ดึงรายการสั่งซื้อที่กรองตามปีและเดือนจริงที่เลือก
 function getActiveScopeTransactions() {
   let list = State.transactions;
   if (State.activeYear !== 'ALL') {
     list = list.filter(t => t.year === State.activeYear);
   }
-  if (State.activeQuarter !== 'ALL') {
+  if (State.activeMonth && State.activeMonth !== 'ALL') {
+    list = list.filter(t => t.month === State.activeMonth);
+  } else if (State.activeQuarter && State.activeQuarter !== 'ALL') {
     const allowedMonths = QUARTER_MONTHS[State.activeQuarter] || [];
     list = list.filter(t => allowedMonths.includes(t.month));
   }
@@ -559,12 +594,13 @@ function renderExecutiveDashboard() {
   const poCount = scopedTxs.length;
 
   const monthlyAgg = getMonthlyAggregatedData();
-  const isQuarterFiltered = State.activeQuarter !== 'ALL';
-  const targetMonths = isQuarterFiltered 
-    ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER)
-    : MONTH_ORDER;
+  const isMonthFiltered = State.activeMonth && State.activeMonth !== 'ALL';
+  const isQuarterFiltered = State.activeQuarter && State.activeQuarter !== 'ALL';
+  const targetMonths = isMonthFiltered
+    ? [State.activeMonth]
+    : (isQuarterFiltered ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER) : MONTH_ORDER);
 
-  const scopedMonthly = isQuarterFiltered
+  const scopedMonthly = (isMonthFiltered || isQuarterFiltered)
     ? monthlyAgg.filter(r => targetMonths.includes(r.month))
     : monthlyAgg;
 
@@ -580,7 +616,7 @@ function renderExecutiveDashboard() {
   }
 
   let totalCreditSavings = scopedMonthly.reduce((sum, m) => sum + (m.creditSaving || 0), 0);
-  if (totalCreditSavings === 0 && (State.activeYear === '2026' || State.activeYear === 'ALL') && !isQuarterFiltered) {
+  if (totalCreditSavings === 0 && (State.activeYear === '2026' || State.activeYear === 'ALL') && !isMonthFiltered && !isQuarterFiltered) {
     totalCreditSavings = 85669.64;
   }
 
@@ -655,17 +691,19 @@ function renderQuickInsight(isManualTrigger = false) {
   }
 
   const activeYear = State.activeYear;
+  const activeMonth = State.activeMonth;
   const activeQuarter = State.activeQuarter;
   const scopedTxs = getActiveScopeTransactions();
   const monthlyAgg = getMonthlyAggregatedData();
   const targetRate = State.targetRate || 0.03;
 
-  const isQuarterFiltered = activeQuarter !== 'ALL';
-  const targetMonths = isQuarterFiltered 
-    ? (QUARTER_MONTHS[activeQuarter] || MONTH_ORDER)
-    : MONTH_ORDER;
+  const isMonthFiltered = activeMonth && activeMonth !== 'ALL';
+  const isQuarterFiltered = activeQuarter && activeQuarter !== 'ALL';
+  const targetMonths = isMonthFiltered
+    ? [activeMonth]
+    : (isQuarterFiltered ? (QUARTER_MONTHS[activeQuarter] || MONTH_ORDER) : MONTH_ORDER);
 
-  const scopedMonthly = isQuarterFiltered
+  const scopedMonthly = (isMonthFiltered || isQuarterFiltered)
     ? monthlyAgg.filter(r => targetMonths.includes(r.month))
     : monthlyAgg;
 
@@ -688,7 +726,8 @@ function renderQuickInsight(isManualTrigger = false) {
 
   // ป้ายกำกับขอบเขตข้อมูล
   let scopeText = activeYear === 'ALL' ? 'ภาพรวมทุกปี' : formatYearBE(activeYear);
-  if (activeQuarter !== 'ALL') scopeText += ` • ไตรมาส ${activeQuarter}`;
+  if (isMonthFiltered) scopeText += ` • เดือน ${THAI_MONTHS[activeMonth] || activeMonth}`;
+  else if (isQuarterFiltered) scopeText += ` • ไตรมาส ${activeQuarter}`;
   if (scopeEl) scopeEl.textContent = scopeText;
 
   // วิเคราะห์ผลงานรายไตรมาส
@@ -776,15 +815,23 @@ function renderQuickInsight(isManualTrigger = false) {
   const currentRateStr = (savingRate * 100).toFixed(2);
   const targetRateStr = (targetRate * 100).toFixed(1);
 
-  if (isQuarterFiltered) {
+  if (isMonthFiltered) {
+    const stratNote = topStrategy ? ` ขับเคลื่อนหลักโดยกลยุทธ์ <em>"${topStrategy.name}"</em> (${(topStrategy.pctOfTotal * 100).toFixed(0)}%)` : '';
+    const mName = THAI_MONTHS[activeMonth] || activeMonth;
+    if (isMet) {
+      insightText = `เดือน <strong>${mName}</strong> ทะลุเป้า KPI: อัตราลดต้นทุนแตะ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M จากยอดซื้อ ฿${purchaseMB}M)${stratNote}`;
+    } else {
+      insightText = `เดือน <strong>${mName}</strong> อัตราลดต้นทุนอยู่ที่ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M ขาดอีก ${Math.abs(Number(rateDeltaPct))}% สู่เป้า ${targetRateStr}%)${stratNote}`;
+    }
+  } else if (isQuarterFiltered) {
     const stratNote = topStrategy ? ` ขับเคลื่อนหลักโดยกลยุทธ์ <em>"${topStrategy.name}"</em> (${(topStrategy.pctOfTotal * 100).toFixed(0)}%)` : '';
     if (isMet) {
       insightText = `ไตรมาส <strong>${activeQuarter}</strong> ทะลุเป้า KPI: อัตราลดต้นทุนแตะ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M จากยอดซื้อ ฿${purchaseMB}M)${stratNote}`;
     } else {
       insightText = `ไตรมาส <strong>${activeQuarter}</strong> อัตราลดต้นทุนอยู่ที่ <span class="highlight-metric">${currentRateStr}%</span> (ประหยัด ฿${savingMB}M ขาดอีก ${Math.abs(Number(rateDeltaPct))}% สู่เป้า ${targetRateStr}%)${stratNote}`;
     }
-  } else if (topQuarter && topQuarter.rate > targetRate && topStrategy) {
-    insightText = `ผลงานเด่นใน <strong>${topQuarter.name}</strong> อัตราลดต้นทุนสูงถึง <span class="highlight-metric">${topQuarter.ratePct}%</span> (ประหยัด ฿${topQuarter.savingMB}M) กลยุทธ์หลัก <em>"${topStrategy.name}"</em> ทำได้ ฿${topStrategy.savingMB}M (${(topStrategy.pctOfTotal * 100).toFixed(0)}% ของยอดรวม)`;
+  } else if (topMonth && (topMonth.cr / topMonth.pv) > targetRate && topStrategy) {
+    insightText = `ผลงานเด่นในเดือน <strong>${topMonth.nameTH}</strong> อัตราลดต้นทุนสูงถึง <span class="highlight-metric">${topMonth.ratePct}%</span> (ประหยัด ฿${topMonth.savingMB}M) กลยุทธ์หลัก <em>"${topStrategy.name}"</em> ทำได้ ฿${topStrategy.savingMB}M (${(topStrategy.pctOfTotal * 100).toFixed(0)}% ของยอดรวม)`;
   } else if (isMet) {
     insightText = `ภาพรวมทำได้ตามเป้าหมาย: อัตราลดต้นทุนจริง <span class="highlight-metric">${currentRateStr}%</span> (<span class="highlight-metric">+${rateDeltaPct}%</span> เหนือเป้าหมาย KPI ${targetRateStr}%) ยอดประหยัดรวม ฿${savingMB} ล้านบาท`;
   } else {
@@ -794,16 +841,9 @@ function renderQuickInsight(isManualTrigger = false) {
   // สร้างป้ายข้อมูลประกอบ (Chips)
   const chips = [];
 
-  if (topQuarter && !isQuarterFiltered) {
+  if (topMonth) {
     chips.push(`
-      <span class="insight-chip chip-orange" title="ไตรมาสที่มีอัตราการลดต้นทุนสูงสุด">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-        <strong>${topQuarter.name}: ${topQuarter.ratePct}%</strong>
-      </span>
-    `);
-  } else if (topMonth) {
-    chips.push(`
-      <span class="insight-chip chip-orange" title="เดือนที่ทำผลงานได้สูงสุดในรอบนี้">
+      <span class="insight-chip chip-orange" title="เดือนที่ทำผลงานลดต้นทุนสูงสุด">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
         <strong>Top: ${topMonth.nameTH} (${topMonth.ratePct}%)</strong>
       </span>
@@ -853,12 +893,13 @@ function renderMonthlyTrendChart() {
   if (!ctx) return;
 
   const rawMonthlyAgg = getMonthlyAggregatedData();
-  const isQuarterFiltered = State.activeQuarter !== 'ALL';
-  const targetMonths = isQuarterFiltered 
-    ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER)
-    : MONTH_ORDER;
+  const isMonthFiltered = State.activeMonth && State.activeMonth !== 'ALL';
+  const isQuarterFiltered = State.activeQuarter && State.activeQuarter !== 'ALL';
+  const targetMonths = isMonthFiltered
+    ? [State.activeMonth]
+    : (isQuarterFiltered ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER) : MONTH_ORDER);
 
-  const monthlyAgg = isQuarterFiltered 
+  const monthlyAgg = (isMonthFiltered || isQuarterFiltered)
     ? rawMonthlyAgg.filter(r => targetMonths.includes(r.month))
     : rawMonthlyAgg;
 
@@ -1298,6 +1339,10 @@ function renderMonthlyKPITracking() {
     totalCreditSaving += row.creditSaving;
 
     const varianceTHB = row.cr - row.target;
+    const hasData = row.pv > 0 || row.cr !== 0 || row.count > 0;
+    const statusBadge = hasData
+      ? `<span class="kpi-badge ${row.isPassed ? 'success' : 'danger'}">${row.isPassed ? '✓ ได้ตามเป้า' : '✕ ต่ำกว่าเป้า'}</span>`
+      : `<span class="kpi-badge neutral">-</span>`;
 
     return `
       <tr>
@@ -1305,15 +1350,11 @@ function renderMonthlyKPITracking() {
         <td>${formatCurrency(row.pv)}</td>
         <td class="highlight-col">${formatCurrency(row.cr)}</td>
         <td>${formatCurrency(row.target)}</td>
-        <td><strong>${(row.pct * 100).toFixed(2)}%</strong></td>
-        <td style="color: ${varianceTHB >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">
-          ${varianceTHB >= 0 ? '+' : ''}${formatCurrency(varianceTHB)}
+        <td><strong>${hasData ? (row.pct * 100).toFixed(2) + '%' : '-'}</strong></td>
+        <td style="color: ${hasData ? (varianceTHB >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)') : 'var(--text-muted)'}">
+          ${hasData ? (varianceTHB >= 0 ? '+' : '') + formatCurrency(varianceTHB) : '-'}
         </td>
-        <td>
-          <span class="kpi-badge ${row.isPassed ? 'success' : 'danger'}">
-            ${row.isPassed ? '✓ ได้ตามเป้า' : '✕ ต่ำกว่าเป้า'}
-          </span>
-        </td>
+        <td>${statusBadge}</td>
         <td>${formatCurrency(row.creditSaving)}</td>
       </tr>
     `;
@@ -1616,7 +1657,9 @@ function filterTransactions() {
     list = list.filter(t => t.year === State.activeYear);
   }
 
-  if (State.activeQuarter !== 'ALL') {
+  if (State.activeMonth && State.activeMonth !== 'ALL') {
+    list = list.filter(t => t.month === State.activeMonth);
+  } else if (State.activeQuarter && State.activeQuarter !== 'ALL') {
     const allowed = QUARTER_MONTHS[State.activeQuarter] || [];
     list = list.filter(t => allowed.includes(t.month));
   }
@@ -2404,12 +2447,12 @@ async function handleUploadedExcel(file) {
       if (monthlySummary.length === 0) {
         const monthCodes = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
         monthlySummary = monthCodes.map(mo => {
-          const moTxs2026 = allCombined.filter(t => t.month === mo && (t.year === '2026' || t.year === '2025'));
+          const moTxs2026 = allCombined.filter(t => t.month === mo && t.year === '2026');
           const pv = moTxs2026.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
           const cr = moTxs2026.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
           const target = pv * (State.targetRate || 0.03);
           const pct = pv > 0 ? (cr / pv) * 100 : 0;
-          const status = cr >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย';
+          const status = pv > 0 ? (cr >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย') : '-';
 
           const creditTxs = moTxs2026.filter(t => (t.strategy || '').includes('เครดิต'));
           const creditSaving = creditTxs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
@@ -2822,12 +2865,12 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
   // 1. คำนวณสรุปผลรายเดือน (Monthly Summary)
   const monthCodes = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const monthlySummary = monthCodes.map(mo => {
-    const moTxs2026 = allCombined.filter(t => t.month === mo && (t.year === '2026' || t.year === '2025'));
+    const moTxs2026 = allCombined.filter(t => t.month === mo && t.year === '2026');
     const pv = moTxs2026.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
     const cr = moTxs2026.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
     const target = pv * (State.targetRate || 0.03);
     const pct = pv > 0 ? (cr / pv) * 100 : 0;
-    const status = cr >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย';
+    const status = pv > 0 ? (cr >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย') : '-';
 
     const creditTxs = moTxs2026.filter(t => (t.strategy || t.method || '').includes('เครดิต'));
     const creditSaving = creditTxs.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
@@ -2836,7 +2879,7 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
       month: mo,
       pv2021: 0, cr2021: 0, pct2021: 0, status2021: '-',
       pv2026: pv, cr2026: cr, target2026: target, pct2026: pct, status2026: status,
-      savingVsTarget: cr - target,
+      savingVsTarget: pv > 0 ? (cr - target) : 0,
       pctDiffTarget: target > 0 ? (cr - target) / target : 0,
       creditDiffDays: creditTxs.length > 0 ? 15 : 0,
       creditPOVal: creditTxs.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0),
@@ -3408,6 +3451,7 @@ const DEFAULT_GOALS = [
     targetValue: 10000000,
     unit: '฿',
     year: '2026',
+    month: 'ALL',
     quarter: 'ALL',
     pic: 'ALL',
     deadline: '2026-12-31',
@@ -3421,6 +3465,7 @@ const DEFAULT_GOALS = [
     targetValue: 3.0,
     unit: '%',
     year: '2026',
+    month: 'ALL',
     quarter: 'ALL',
     pic: 'ALL',
     deadline: '2026-12-31',
@@ -3434,6 +3479,7 @@ const DEFAULT_GOALS = [
     targetValue: 100000,
     unit: '฿',
     year: '2026',
+    month: 'ALL',
     quarter: 'ALL',
     pic: 'ALL',
     deadline: '2026-12-31',
@@ -3447,6 +3493,7 @@ const DEFAULT_GOALS = [
     targetValue: 3500000,
     unit: '฿',
     year: '2026',
+    month: 'ALL',
     quarter: 'ALL',
     pic: 'Pawina',
     deadline: '2026-12-31',
@@ -3495,8 +3542,10 @@ function calculateGoalProgress(goal) {
   if (goal.year && goal.year !== 'ALL') {
     txs = txs.filter(t => t.year === goal.year);
   }
-  // กรองตามไตรมาส
-  if (goal.quarter && goal.quarter !== 'ALL') {
+  // กรองตามเดือนจริง หรือไตรมาสเดิม
+  if (goal.month && goal.month !== 'ALL') {
+    txs = txs.filter(t => t.month === goal.month);
+  } else if (goal.quarter && goal.quarter !== 'ALL') {
     const months = QUARTER_MONTHS[goal.quarter] || [];
     txs = txs.filter(t => months.includes(t.month));
   }
@@ -3655,7 +3704,9 @@ function renderGoalsWidget() {
     const prog = calculateGoalProgress(g);
     const catName = getGoalCategoryName(g.category);
     const scopeYear = formatYearBE(g.year);
-    const scopeQuarter = g.quarter === 'ALL' ? 'ทั้งปี' : g.quarter;
+    const scopeMonth = (g.month && g.month !== 'ALL')
+      ? (THAI_MONTHS[g.month] || g.month)
+      : (g.quarter && g.quarter !== 'ALL' ? g.quarter : 'ทั้งปี');
     const scopePIC = g.pic === 'ALL' ? '' : `PIC: ${g.pic}`;
 
     return `
@@ -3664,7 +3715,7 @@ function renderGoalsWidget() {
           <div class="goal-meta-tags">
             <span class="goal-tag goal-tag-cat">${catName}</span>
             <span class="goal-tag goal-tag-scope">${scopeYear}</span>
-            <span class="goal-tag goal-tag-scope">${scopeQuarter}</span>
+            <span class="goal-tag goal-tag-scope">${scopeMonth}</span>
             ${scopePIC ? `<span class="goal-tag goal-tag-scope">${scopePIC}</span>` : ''}
           </div>
           <div class="goal-card-header">
@@ -3775,7 +3826,11 @@ window.openGoalChartModal = function(goalId) {
   // ข้อมูลส่วนหัว
   document.getElementById('gdetail-cat-badge').textContent = getGoalCategoryName(goal.category);
   document.getElementById('gdetail-year-badge').textContent = formatYearBE(goal.year);
-  document.getElementById('gdetail-quarter-badge').textContent = goal.quarter === 'ALL' ? 'ทั้งปี' : goal.quarter;
+  const scopeMonthText = (goal.month && goal.month !== 'ALL')
+    ? (THAI_MONTHS[goal.month] || goal.month)
+    : (goal.quarter && goal.quarter !== 'ALL' ? goal.quarter : 'ทั้งปี');
+  const mBadge = document.getElementById('gdetail-month-badge') || document.getElementById('gdetail-quarter-badge');
+  if (mBadge) mBadge.textContent = scopeMonthText;
   
   const statusBadge = document.getElementById('gdetail-status-badge');
   statusBadge.className = `goal-status-badge ${prog.status}`;
@@ -3785,7 +3840,7 @@ window.openGoalChartModal = function(goalId) {
 
   // 4-Card Summary Matrix
   document.getElementById('gdetail-val-target').textContent = prog.formattedTarget;
-  document.getElementById('gdetail-sub-target').textContent = `ขอบเขต: ${formatYearBE(goal.year)} (${goal.quarter === 'ALL' ? 'Full Year' : goal.quarter})`;
+  document.getElementById('gdetail-sub-target').textContent = `ขอบเขต: ${formatYearBE(goal.year)} (${scopeMonthText})`;
 
   document.getElementById('gdetail-val-current').textContent = prog.formattedCurrent;
   document.getElementById('gdetail-sub-current').textContent = `อัตราความสำเร็จ ${prog.pct.toFixed(1)}%`;
@@ -3889,7 +3944,9 @@ function renderGoalPieChart() {
   // ดึงรายการสั่งซื้อที่เข้าข่ายของเป้าหมายนี้
   let txs = State.transactions || [];
   if (goal.year && goal.year !== 'ALL') txs = txs.filter(t => t.year === goal.year);
-  if (goal.quarter && goal.quarter !== 'ALL') {
+  if (goal.month && goal.month !== 'ALL') {
+    txs = txs.filter(t => t.month === goal.month);
+  } else if (goal.quarter && goal.quarter !== 'ALL') {
     const ms = QUARTER_MONTHS[goal.quarter] || [];
     txs = txs.filter(t => ms.includes(t.month));
   }
@@ -4139,7 +4196,8 @@ window.openAddGoalModal = function() {
   form.reset();
   document.getElementById('goal-form-id').value = '';
   document.getElementById('goal-input-year').value = State.activeYear === 'ALL' ? '2026' : State.activeYear;
-  document.getElementById('goal-input-quarter').value = State.activeQuarter || 'ALL';
+  const monthInput = document.getElementById('goal-input-month') || document.getElementById('goal-input-quarter');
+  if (monthInput) monthInput.value = State.activeMonth || 'ALL';
   document.getElementById('goal-input-deadline').value = '2026-12-31';
   handleGoalCategoryChange();
 
@@ -4161,7 +4219,8 @@ window.openEditGoalModal = function(id) {
   document.getElementById('goal-input-category').value = goal.category || 'savings_thb';
   document.getElementById('goal-input-target-val').value = goal.targetValue || '';
   document.getElementById('goal-input-year').value = goal.year || '2026';
-  document.getElementById('goal-input-quarter').value = goal.quarter || 'ALL';
+  const monthInput = document.getElementById('goal-input-month') || document.getElementById('goal-input-quarter');
+  if (monthInput) monthInput.value = goal.month || goal.quarter || 'ALL';
   document.getElementById('goal-input-pic').value = goal.pic || 'ALL';
   document.getElementById('goal-input-deadline').value = goal.deadline || '2026-12-31';
   document.getElementById('goal-input-notes').value = goal.notes || '';
@@ -4210,7 +4269,9 @@ window.handleGoalFormSubmit = function(e) {
   const category = document.getElementById('goal-input-category').value;
   const targetValue = parseFloat(document.getElementById('goal-input-target-val').value) || 0;
   const year = document.getElementById('goal-input-year').value;
-  const quarter = document.getElementById('goal-input-quarter').value;
+  const monthInput = document.getElementById('goal-input-month') || document.getElementById('goal-input-quarter');
+  const month = monthInput ? monthInput.value : 'ALL';
+  const quarter = month; // เก็บไว้เป็น alias เพื่อ backward compatibility
   const pic = document.getElementById('goal-input-pic').value;
   const deadline = document.getElementById('goal-input-deadline').value;
   const notes = document.getElementById('goal-input-notes').value.trim();
@@ -4237,6 +4298,7 @@ window.handleGoalFormSubmit = function(e) {
         targetValue,
         unit,
         year,
+        month,
         quarter,
         pic,
         deadline,
@@ -4252,6 +4314,7 @@ window.handleGoalFormSubmit = function(e) {
       targetValue,
       unit,
       year,
+      month,
       quarter,
       pic,
       deadline,

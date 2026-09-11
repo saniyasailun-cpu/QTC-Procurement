@@ -746,6 +746,7 @@ html, body {
 .kpi-badge.success { background: var(--accent-emerald-bg); color: var(--accent-emerald); }
 .kpi-badge.warning { background: var(--accent-amber-bg); color: var(--accent-amber); }
 .kpi-badge.danger { background: var(--accent-rose-bg); color: var(--accent-rose); }
+.kpi-badge.neutral { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
 
 /* วงแหวนเป้าหมาย (Progress Ring Mini Gauge) */
 .gauge-circle {
