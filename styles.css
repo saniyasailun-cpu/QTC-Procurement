@@ -2956,4 +2956,114 @@ textarea {
   }
 }
 
+/* Monthly performance chart */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chart-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 14px 0 6px;
+}
+
+.chart-summary-item {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.chart-summary-item span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+}
+
+.chart-summary-item strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-status-badge {
+  justify-self: end;
+  padding: 6px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chart-status-badge.is-positive {
+  border-color: color-mix(in srgb, var(--accent-emerald) 36%, transparent);
+  color: var(--accent-emerald);
+  background: color-mix(in srgb, var(--accent-emerald) 10%, transparent);
+}
+
+.chart-status-badge.is-negative {
+  border-color: color-mix(in srgb, var(--accent-rose) 36%, transparent);
+  color: var(--accent-rose);
+  background: color-mix(in srgb, var(--accent-rose) 10%, transparent);
+}
+
+.monthly-chart-box {
+  height: 300px;
+}
+
+@media (max-width: 600px) {
+  .card-header-bar {
+    align-items: flex-start;
+  }
+
+  .chart-mode-tabs {
+    width: 100%;
+  }
+
+  .chart-tab-btn {
+    flex: 1;
+    min-height: 36px;
+  }
+
+  .chart-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .chart-summary-item {
+    padding: 8px;
+  }
+
+  .chart-summary-item strong {
+    font-size: 11px;
+  }
+
+  .chart-status-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .monthly-chart-box {
+    height: 280px;
+  }
+}
+
 

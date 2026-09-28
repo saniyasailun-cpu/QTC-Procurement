@@ -325,16 +325,32 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
                     ผลการดำเนินงานลดต้นทุนเทียบเป้าหมาย 3%
                   </div>
-                  <div class="card-header-sub">เปรียบเทียบมูลค่าสั่งซื้อ มูลค่าต่อรองได้ และเส้นเป้าหมาย 3%</div>
+                  <div class="card-header-sub">ยอดลดต้นทุนจริงรายเดือน เทียบกับเป้าหมายจากมูลค่าสั่งซื้อ</div>
                 </div>
                 <!-- ปุ่มสลับโหมดชาร์ต -->
-                <div class="chart-mode-tabs">
-                  <button class="chart-tab-btn active" id="btn-chart-bar" onclick="setChartMode('bar')">กราฟแท่งรายเดือน</button>
-                  <button class="chart-tab-btn" id="btn-chart-curve" onclick="setChartMode('curve')">กราฟสะสม S-Curve</button>
+                <div class="chart-mode-tabs" role="tablist" aria-label="รูปแบบกราฟผลลดต้นทุน">
+                  <button class="chart-tab-btn active" id="btn-chart-bar" role="tab" aria-selected="true" aria-controls="monthlyTrendChart" onclick="setChartMode('bar')">รายเดือน</button>
+                  <button class="chart-tab-btn" id="btn-chart-curve" role="tab" aria-selected="false" aria-controls="monthlyTrendChart" onclick="setChartMode('curve')">สะสม</button>
                 </div>
               </div>
-              <div class="chart-canvas-box">
-                <canvas id="monthlyTrendChart"></canvas>
+              <div class="chart-summary-grid" aria-label="สรุปกราฟผลลดต้นทุน">
+                <div class="chart-summary-item">
+                  <span>ลดต้นทุนจริง</span>
+                  <strong id="chart-actual-total">฿0.00</strong>
+                </div>
+                <div class="chart-summary-item">
+                  <span>เป้าหมาย</span>
+                  <strong id="chart-target-total">฿0.00</strong>
+                </div>
+                <div class="chart-summary-item">
+                  <span>ส่วนต่าง</span>
+                  <strong id="chart-variance-total">฿0.00</strong>
+                </div>
+                <span class="chart-status-badge" id="chart-status-badge">รอข้อมูล</span>
+              </div>
+              <div class="chart-canvas-box monthly-chart-box">
+                <canvas id="monthlyTrendChart" role="img" aria-describedby="monthly-chart-summary"></canvas>
+                <p class="sr-only" id="monthly-chart-summary"></p>
               </div>
             </div>
 

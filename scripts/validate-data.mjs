@@ -37,5 +37,8 @@ const usedTokens = new Set([...css.matchAll(/var\(--([\w-]+)/g)].map(match => ma
 assert.deepEqual([...usedTokens].filter(token => !definedTokens.has(token)), [], 'undefined CSS design token');
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, 'reduced-motion support missing');
 assert.match(css, /:focus-visible/, 'keyboard focus style missing');
+assert.match(html, /id="monthly-chart-summary"/, 'monthly chart text summary missing');
+assert.match(app, /animation: chartAnimation/, 'monthly chart does not respect reduced motion');
+assert.match(app, /มูลค่าสั่งซื้อ:.*formatCurrency\(row\.pv\)/, 'monthly chart exact purchase value missing');
 
 console.log(`Data valid: ${transactions.length} transactions; source gid=543596522.`);
