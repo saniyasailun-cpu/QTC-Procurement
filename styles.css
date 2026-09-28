@@ -73,6 +73,14 @@
   --sidebar-width: 255px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.static-host .goal-action-btn {
+  display: none !important;
+}
+
 [data-theme="light"] {
   --bg-base: #f4f7fb;
   --bg-surface: #ffffff;

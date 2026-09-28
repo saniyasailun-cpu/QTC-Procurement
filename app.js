@@ -5,9 +5,13 @@
  * ==========================================================================
  */
 
+const IS_GITHUB_PAGES = location.hostname.endsWith('.github.io');
+const LIVE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1iVgKgCdQRCz4_Vo1mdmM38xJHQI4B5mzKx7aJ9oBKn0/edit?gid=543596522#gid=543596522';
+
 // สถานะการทำงานของระบบ (Application Global State)
 const State = {
   data: null,
+  dataQuality: null,
   activeYear: '2026',
   activeMonth: 'ALL',
   activeQuarter: 'ALL',
@@ -163,8 +167,13 @@ const PIC_COLOR_MAP = {
 
 // เริ่มต้นการทำงานเมื่อโหลดหน้าเสร็จ
 document.addEventListener('DOMContentLoaded', async () => {
+  if (IS_GITHUB_PAGES) {
+    document.body.classList.add('static-host');
+    document.querySelectorAll('[data-static-hide]').forEach(el => { el.hidden = true; });
+  }
+
   // โหลดเป้าหมายที่บันทึกไว้
-  const savedRate = localStorage.getItem('qtc_target_rate');
+  const savedRate = IS_GITHUB_PAGES ? null : localStorage.getItem('qtc_target_rate');
   const rateInput = document.getElementById('target-rate-input');
   let currentVal = 3.0;
   if (savedRate) {
@@ -186,9 +195,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTableEvents();
   initSupplierEvents();
   initSimulators();
-  initDropzone();
-  initGlobalDragAndDrop();
-  initGoogleSheetSync();
+  if (!IS_GITHUB_PAGES) {
+    initDropzone();
+    initGlobalDragAndDrop();
+  }
+  await initGoogleSheetSync();
 
   // ปิด Modal ด้วยปุ่ม ESC
   document.addEventListener('keydown', (e) => {
@@ -229,6 +240,22 @@ function updateThemeIcons() {
 
 // โหลดข้อมูล
 async function loadData() {
+  if (IS_GITHUB_PAGES) {
+    try {
+      const json = window.KPI_DATA || await fetch(`data.json?_t=${Date.now()}`, { cache: 'no-store' }).then(res => {
+        if (!res.ok) throw new Error(`data.json status ${res.status}`);
+        return res.json();
+      });
+      window.KPI_DATA = json;
+      State.data = json;
+      setupDataset();
+      renderAllViews();
+    } catch (err) {
+      console.error('Static fallback data failed:', err);
+    }
+    return;
+  }
+
   // 1. ตรวจสอบข้อมูลล่าสุดจาก Backend API (/api/data) เป็นอันดับแรก (ป้องกันแคชเบราว์เซอร์ 100%)
   try {
     const res = await fetch(`/api/data?_t=${Date.now()}`, { 
@@ -394,7 +421,7 @@ function switchView(viewName) {
     'suppliers': { title: 'การวิเคราะห์ข้อมูลคู่ค้า (ซัพพลายเออร์)', desc: 'สรุปยอดสั่งซื้อและมูลค่าส่วนลดที่ได้รับจากคู่ค้าแต่ละราย' },
     'pic-team': { title: 'สรุปผลงานทีมจัดซื้อรายบุคคล', desc: 'สถิติและกลยุทธ์การต่อรองของเจ้าหน้าที่จัดซื้อแต่ละท่าน' },
     'simulators': { title: 'โปรแกรมคำนวณ Kaizen & ขยายเครดิตเทอม', desc: 'เครื่องมือจำลองผลประหยัดเวลาและผลประโยชน์ทางการเงิน' },
-    'data-import': { title: 'จัดการไฟล์ข้อมูล Excel', desc: 'อัปโหลดไฟล์ Excel (.xlsx) ชุดใหม่ หรือดาวน์โหลดข้อมูล' }
+    'data-import': { title: 'แหล่งข้อมูลและส่งออก', desc: 'ตรวจสอบการซิงค์ Google Sheet และดาวน์โหลดข้อมูลที่กำลังแสดง' }
   };
 
   const current = titles[viewName] || titles['dashboard'];
@@ -1352,7 +1379,7 @@ function renderMonthlyKPITracking() {
         <td>${formatCurrency(row.target)}</td>
         <td><strong>${hasData ? (row.pct * 100).toFixed(2) + '%' : '-'}</strong></td>
         <td style="color: ${hasData ? (varianceTHB >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)') : 'var(--text-muted)'}">
-          ${hasData ? (varianceTHB >= 0 ? '+' : '') + formatCurrency(varianceTHB) : '-'}
+          ${hasData ? (varianceTHB >= 0 ? '+' + formatCurrency(varianceTHB) : 'ขาด ' + formatCurrency(Math.abs(varianceTHB))) : '-'}
         </td>
         <td>${statusBadge}</td>
         <td>${formatCurrency(row.creditSaving)}</td>
@@ -1370,7 +1397,7 @@ function renderMonthlyKPITracking() {
       <td>${formatCurrency(totalTarget)}</td>
       <td style="color: var(--accent-primary);">${(totalActualPct * 100).toFixed(2)}%</td>
       <td style="color: ${totalCR - totalTarget >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">
-        ${totalCR - totalTarget >= 0 ? '+' : ''}${formatCurrency(totalCR - totalTarget)}
+        ${totalCR - totalTarget >= 0 ? '+' + formatCurrency(totalCR - totalTarget) : 'ขาด ' + formatCurrency(Math.abs(totalCR - totalTarget))}
       </td>
       <td>
         <span class="kpi-badge ${isTotalPassed ? 'success' : 'danger'}">
@@ -2788,6 +2815,8 @@ window.downloadServerExcel = function() {
 };
 
 window.refreshLatestData = async function(showFeedback = true) {
+  if (IS_GITHUB_PAGES) return window.syncGoogleSheetNow(showFeedback);
+
   const topbarLabel = document.getElementById('topbar-sync-label');
   if (topbarLabel) topbarLabel.textContent = 'กำลังโหลด...';
 
@@ -2947,22 +2976,26 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
 }
 
 async function initGoogleSheetSync() {
-  let config = { url: '', autoSync: false };
+  let config = IS_GITHUB_PAGES
+    ? { url: LIVE_SHEET_URL, autoSync: true }
+    : { url: '', autoSync: false };
 
   // 1. อ่านจาก Server ก่อน เพื่อให้ทุกเครื่องที่เปิดใช้การตั้งค่าเดียวกัน
-  try {
-    const res = await fetch('/api/sheet-config');
-    if (res.ok) {
-      const serverConfig = await res.json();
-      if (serverConfig.url) {
-        config.url = serverConfig.url;
-        config.autoSync = !!serverConfig.autoSync;
+  if (!IS_GITHUB_PAGES) {
+    try {
+      const res = await fetch('/api/sheet-config');
+      if (res.ok) {
+        const serverConfig = await res.json();
+        if (serverConfig.url) {
+          config.url = serverConfig.url;
+          config.autoSync = !!serverConfig.autoSync;
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // 2. ถ้าใน Server ไม่มี ให้อ่านจาก LocalStorage หรือ State.data
-  if (!config.url) {
+  if (!IS_GITHUB_PAGES && !config.url) {
     const saved = localStorage.getItem(GSHEET_STORAGE_KEY);
     if (saved) {
       try {
@@ -2980,13 +3013,19 @@ async function initGoogleSheetSync() {
   const urlInput = document.getElementById('gsheet-url-input');
   const autoSyncCheck = document.getElementById('gsheet-auto-sync');
 
-  if (urlInput) urlInput.value = config.url || '';
-  if (autoSyncCheck && config.autoSync !== undefined) autoSyncCheck.checked = config.autoSync;
+  if (urlInput) {
+    urlInput.value = config.url || '';
+    urlInput.readOnly = IS_GITHUB_PAGES;
+  }
+  if (autoSyncCheck && config.autoSync !== undefined) {
+    autoSyncCheck.checked = config.autoSync;
+    autoSyncCheck.disabled = IS_GITHUB_PAGES;
+  }
 
   const badge = document.getElementById('gsheet-status-badge');
   if (badge) {
     if (config.url && config.url.trim() !== '') {
-      badge.textContent = config.autoSync ? `🟢 ซิงค์ชีตสดอัตโนมัติ` : `🟢 พร้อมซิงค์จาก Google Sheet`;
+      badge.textContent = IS_GITHUB_PAGES ? `🟢 แหล่งข้อมูล Google Sheet สด` : (config.autoSync ? `🟢 ซิงค์ชีตสดอัตโนมัติ` : `🟢 พร้อมซิงค์จาก Google Sheet`);
       badge.className = 'tier-tag tier-high';
     } else {
       badge.textContent = `⚪ ยังไม่มีลิงก์ชีต (รอใส่ URL)`;
@@ -2997,7 +3036,7 @@ async function initGoogleSheetSync() {
   // ดึงข้อมูลสดจาก Google Sheet เฉพาะเมื่อผู้ใช้ระบุ URL ไว้อย่างชัดเจนเท่านั้น (ไม่มีค่าฮาร์ดโค้ดเดิม)
   if (config.autoSync && config.url && config.url.trim() !== '') {
     console.log('🔄 Auto-syncing live from configured Google Sheet URL...');
-    syncGoogleSheetNow(false);
+    await syncGoogleSheetNow(false);
   }
 }
 
@@ -3132,6 +3171,11 @@ function parseGvizTextToRows(gvizText) {
   });
 
   if (skippedRows > 0) console.warn(`Skipped ${skippedRows} incomplete Google Sheet rows.`);
+  State.dataQuality = {
+    sourceRows: data.table.rows.length,
+    importedRows: rows.length,
+    skippedRows
+  };
 
   return rows;
 }
@@ -3272,8 +3316,12 @@ window.importPastedCSVData = async function() {
 };
 
 window.syncGoogleSheetNow = async function(showAlert = true) {
-  const urlInput = document.getElementById('gsheet-url-input')?.value.trim() || '';
-  const autoSync = document.getElementById('gsheet-auto-sync')?.checked ?? true;
+  const urlInput = IS_GITHUB_PAGES
+    ? LIVE_SHEET_URL
+    : (document.getElementById('gsheet-url-input')?.value.trim() || '');
+  const autoSync = IS_GITHUB_PAGES
+    ? true
+    : (document.getElementById('gsheet-auto-sync')?.checked ?? true);
 
   const { sheetId, gid } = extractGoogleSheetInfo(urlInput);
   if (!sheetId) {
@@ -3325,19 +3373,20 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
 
-    // บันทึกการตั้งค่าลง LocalStorage
-    localStorage.setItem(GSHEET_STORAGE_KEY, JSON.stringify({
-      url: urlInput,
-      autoSync: autoSync,
-      lastSync: timeStr
-    }));
-    try {
-      localStorage.setItem('qtc_custom_dataset', JSON.stringify(completeDataset));
-    } catch (e) {}
+    if (!IS_GITHUB_PAGES) {
+      localStorage.setItem(GSHEET_STORAGE_KEY, JSON.stringify({
+        url: urlInput,
+        autoSync: autoSync,
+        lastSync: timeStr
+      }));
+      try {
+        localStorage.setItem('qtc_custom_dataset', JSON.stringify(completeDataset));
+      } catch (e) {}
+    }
 
     // บันทึกถาวรลง Backend Server (data.json, data.js และ sheet-config)
-    try {
-      await fetch('/api/upload-excel', {
+    if (!IS_GITHUB_PAGES) try {
+      const uploadRes = await fetch('/api/upload-excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3346,7 +3395,7 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
         })
       });
 
-      await fetch('/api/sheet-config', {
+      const configRes = await fetch('/api/sheet-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3354,8 +3403,15 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
           autoSync: autoSync
         })
       });
+      if (!uploadRes.ok || !configRes.ok) throw new Error('Backend rejected Google Sheet sync');
     } catch (backendErr) {
       console.warn('Backend sync error:', backendErr);
+    }
+
+    const quality = document.getElementById('gsheet-quality-summary');
+    if (quality && State.dataQuality) {
+      quality.textContent = `นำเข้า ${State.dataQuality.importedRows.toLocaleString()} รายการ • ไม่รวมแถวว่าง/ไม่สมบูรณ์ ${State.dataQuality.skippedRows.toLocaleString()} แถว`;
+      quality.style.color = State.dataQuality.skippedRows > 0 ? 'var(--accent-amber)' : 'var(--accent-emerald)';
     }
 
     if (badge) {
@@ -3367,10 +3423,18 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
     }
 
     if (showAlert) {
-      alert(`✅ ซิงค์ข้อมูลจาก Google Sheet สำเร็จ!\n• โหลดข้อมูลสดทั้งหมด: ${allTransactions.length.toLocaleString()} รายการ\n• ข้อมูลถูกบันทึกลงเซิร์ฟเวอร์หลักถาวรแล้ว ทุกคนที่เปิดเว็บจะเห็นข้อมูลชุดนี้ร่วมกัน`);
+      const storageMessage = IS_GITHUB_PAGES
+        ? '• หน้าเว็บนี้อ่านข้อมูลสดจาก Google Sheet โดยตรง'
+        : '• ข้อมูลถูกบันทึกลงเซิร์ฟเวอร์หลักถาวรแล้ว';
+      alert(`✅ ซิงค์ข้อมูลจาก Google Sheet สำเร็จ!\n• นำเข้า: ${allTransactions.length.toLocaleString()} รายการ\n• ไม่รวมแถวว่าง/ไม่สมบูรณ์: ${(State.dataQuality?.skippedRows || 0).toLocaleString()} แถว\n${storageMessage}`);
     }
   } catch (err) {
     console.error('Google Sheet Sync Error:', err);
+    const quality = document.getElementById('gsheet-quality-summary');
+    if (quality) {
+      quality.textContent = 'โหลดชีตสดไม่สำเร็จ — กำลังแสดงข้อมูลสำรองจากไฟล์ล่าสุด';
+      quality.style.color = 'var(--accent-rose)';
+    }
     if (badge) {
       badge.textContent = `🔴 ซิงค์ไม่สำเร็จ`;
       badge.className = 'tier-tag tier-low';
@@ -3518,7 +3582,7 @@ const DEFAULT_GOALS = [
 ];
 
 function initGoals() {
-  const saved = localStorage.getItem('qtc_strategic_goals');
+  const saved = IS_GITHUB_PAGES ? null : localStorage.getItem('qtc_strategic_goals');
   if (saved) {
     try {
       State.goals = JSON.parse(saved);
@@ -3527,7 +3591,7 @@ function initGoals() {
     }
   } else {
     State.goals = [...DEFAULT_GOALS];
-    localStorage.setItem('qtc_strategic_goals', JSON.stringify(State.goals));
+    if (!IS_GITHUB_PAGES) localStorage.setItem('qtc_strategic_goals', JSON.stringify(State.goals));
   }
 
   // ตัวกรองหมวดหมู่เป้าหมายในหน้า View Goals
