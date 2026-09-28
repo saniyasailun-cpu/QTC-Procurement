@@ -3018,7 +3018,7 @@ function extractGoogleSheetInfo(input) {
 
   // Extract GID if user passed specific tab URL
   let gid = '';
-  const gidMatch = trimmed.match(/[#&]gid=([0-9]+)/);
+  const gidMatch = trimmed.match(/[?&#]gid=([0-9]+)/);
   if (gidMatch && gidMatch[1]) {
     gid = gidMatch[1];
   }
@@ -3050,6 +3050,7 @@ function parseGvizTextToRows(gvizText) {
   };
 
   const rows = [];
+  let skippedRows = 0;
   data.table.rows.forEach((r, rowIdx) => {
     if (!r || !r.c) return;
     
@@ -3068,8 +3069,12 @@ function parseGvizTextToRows(gvizText) {
     let mo = String(getCellVal(1) || 'JAN').toUpperCase().trim();
     if (mo.length > 3) mo = mo.slice(0, 3);
 
-    const po = String(getCellVal(2) || `PO-${rowIdx + 1}`).trim();
-    const supp = String(getCellVal(3) || 'ไม่ระบุ').trim();
+    const po = String(getCellVal(2) || '').trim();
+    const supp = String(getCellVal(3) || '').trim();
+    if (!po && !supp) {
+      skippedRows++;
+      return;
+    }
     const desc = String(getCellVal(4) || '').trim();
     
     const qty = parseNum(getCellVal(5));
@@ -3079,44 +3084,54 @@ function parseGvizTextToRows(gvizText) {
     let totalPrice = parseNum(getCellVal(8));
     if (totalPrice === 0 && qty > 0 && minPrice > 0) totalPrice = qty * minPrice;
 
-    const negPrice = parseNum(getCellVal(9)) || minPrice;
-    let unitDiff = parseNum(getCellVal(10)) || (minPrice - negPrice);
-    let totalSaving = parseNum(getCellVal(11)) || (unitDiff * qty);
+    // Rows without a purchase value are unfinished source rows and must not affect KPI totals.
+    if (totalPrice <= 0) {
+      skippedRows++;
+      return;
+    }
 
-    let pctDisc = parseNum(getCellVal(12));
-    if (pctDisc === 0 && totalPrice > 0 && totalSaving > 0) {
+    const rawNegPrice = getCellVal(9);
+    const negPrice = rawNegPrice === '' ? minPrice : parseNum(rawNegPrice);
+    const rawUnitDiff = getCellVal(10);
+    const unitDiff = rawUnitDiff === '' ? (minPrice - negPrice) : parseNum(rawUnitDiff);
+    const rawTotalSaving = getCellVal(11);
+    const totalSaving = rawTotalSaving === '' ? (unitDiff * qty) : parseNum(rawTotalSaving);
+
+    const rawPctDisc = getCellVal(12);
+    let pctDisc = parseNum(rawPctDisc);
+    if (rawPctDisc === '' && totalPrice > 0) {
       pctDisc = totalSaving / totalPrice;
     }
     if (pctDisc > 1) pctDisc = pctDisc / 100;
 
-    const method = String(getCellVal(13) || 'Negotiate').trim();
+    const method = String(getCellVal(13) || 'ไม่ระบุ').trim();
     const pic = String(getCellVal(14) || 'ไม่ระบุ').trim();
     const remark = String(getCellVal(15) || '').trim();
 
-    if (po || supp !== 'ไม่ระบุ' || totalPrice > 0 || totalSaving > 0) {
-      rows.push({
-        id: `gs-${rowIdx + 1}`,
-        globalId: `gs-${rowIdx + 1}`,
-        year: yr,
-        month: mo,
-        poNo: po,
-        supplier: supp,
-        description: desc,
-        qty: qty,
-        unit: unit,
-        minUnitPrice: minPrice,
-        totalPrice: totalPrice,
-        negotiatedUnitPrice: negPrice,
-        unitDifference: unitDiff,
-        totalSaving: totalSaving,
-        percentDiscount: pctDisc,
-        strategy: method,
-        method: method,
-        pic: pic,
-        remark: remark
-      });
-    }
+    rows.push({
+      id: `gs-${rowIdx + 1}`,
+      globalId: `gs-${rowIdx + 1}`,
+      year: yr,
+      month: mo,
+      poNo: po,
+      supplier: supp,
+      description: desc,
+      qty: qty,
+      unit: unit,
+      minUnitPrice: minPrice,
+      totalPrice: totalPrice,
+      negotiatedUnitPrice: negPrice,
+      unitDifference: unitDiff,
+      totalSaving: totalSaving,
+      percentDiscount: pctDisc,
+      strategy: method,
+      method: method,
+      pic: pic,
+      remark: remark
+    });
   });
+
+  if (skippedRows > 0) console.warn(`Skipped ${skippedRows} incomplete Google Sheet rows.`);
 
   return rows;
 }

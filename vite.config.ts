@@ -139,9 +139,20 @@ function backendApiPlugin(): Plugin {
   };
 }
 
+function staticDataPlugin(): Plugin {
+  return {
+    name: 'static-data-plugin',
+    generateBundle() {
+      for (const fileName of ['app.js', 'data.js']) {
+        this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(fileName) });
+      }
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss(), backendApiPlugin()],
+    plugins: [react(), tailwindcss(), backendApiPlugin(), staticDataPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
