@@ -17,7 +17,7 @@ const State = {
   activeQuarter: 'ALL',
   activeView: 'dashboard',
   chartMode: 'bar', // 'bar' | 'curve'
-  theme: localStorage.getItem('app-theme') || 'dark',
+  theme: localStorage.getItem('app-theme') || 'light',
   targetRate: (() => {
     const raw = localStorage.getItem('qtc_target_rate');
     if (!raw) return 0.03;
@@ -167,6 +167,11 @@ const PIC_COLOR_MAP = {
 
 // เริ่มต้นการทำงานเมื่อโหลดหน้าเสร็จ
 document.addEventListener('DOMContentLoaded', async () => {
+  document.querySelectorAll('svg').forEach(svg => {
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+  });
+
   if (IS_GITHUB_PAGES) {
     document.body.classList.add('static-host');
     document.querySelectorAll('[data-static-hide]').forEach(el => { el.hidden = true; });
@@ -389,6 +394,7 @@ function setupDataset() {
 // ระบบสลับเมนู
 function initNavigation() {
   document.querySelectorAll('.nav-item').forEach(item => {
+    if (item.classList.contains('active')) item.setAttribute('aria-current', 'page');
     item.addEventListener('click', (e) => {
       e.preventDefault();
       switchView(item.getAttribute('data-view'));
@@ -406,7 +412,10 @@ function switchView(viewName) {
   State.activeView = viewName;
   
   document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('data-view') === viewName);
+    const isActive = el.getAttribute('data-view') === viewName;
+    el.classList.toggle('active', isActive);
+    if (isActive) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
 
   document.querySelectorAll('.view-section').forEach(sec => {
@@ -415,7 +424,7 @@ function switchView(viewName) {
 
   const titles = {
     'dashboard': { title: 'ภาพรวมผู้บริหาร', desc: 'สรุปผลการต่อรองลดต้นทุนจัดซื้อและติดตามผลการดำเนินงานตามเป้าหมาย' },
-    'goals': { title: 'เป้าหมาย & แผนยุทธศาสตร์ (Goals & Targets)', desc: 'กำหนดและติดตามเป้าหมายการลดต้นทุนจัดซื้อประจำปีและรายบุคคล' },
+    'goals': { title: 'เป้าหมายและแผนยุทธศาสตร์', desc: 'กำหนดและติดตามเป้าหมายการลดต้นทุนจัดซื้อประจำปีและรายบุคคล' },
     'kpi-tracking': { title: 'สรุปผล KPI รายเดือน & รายปี', desc: 'เปรียบเทียบผลการประหยัดต้นทุนเทียบเป้าหมาย 3.0% ประจำปี' },
     'transactions': { title: 'รายการสั่งซื้อ & ส่วนลด (PO Data)', desc: 'ค้นหาและตรวจสอบรายการสั่งซื้อกว่า 5,800+ รายการ' },
     'suppliers': { title: 'การวิเคราะห์ข้อมูลคู่ค้า (ซัพพลายเออร์)', desc: 'สรุปยอดสั่งซื้อและมูลค่าส่วนลดที่ได้รับจากคู่ค้าแต่ละราย' },
@@ -682,7 +691,7 @@ function renderExecutiveDashboard() {
 
   if (isMet) {
     targetBadge.className = 'kpi-badge success';
-    targetBadge.textContent = 'ได้ตามเป้าหมาย (Passed)';
+    targetBadge.textContent = 'ได้ตามเป้าหมาย';
     targetDiff.textContent = `+${((savingRate - targetRate) * 100).toFixed(2)}% สูงกว่าเป้าหมาย (${(targetRate * 100).toFixed(1)}%)`;
   } else {
     targetBadge.className = 'kpi-badge danger';
@@ -3682,10 +3691,10 @@ function calculateGoalProgress(goal) {
     const surplusPct = pct - 100;
     if (goal.category === 'savings_rate') {
       formattedGapText = `+${surplusVal.toFixed(2)}% เกินเป้า`;
-      formattedGapTag = `🎉 เกินเป้า +${surplusPct.toFixed(1)}%`;
+      formattedGapTag = `เกินเป้า +${surplusPct.toFixed(1)}%`;
     } else {
       formattedGapText = `+${formatCurrency(surplusVal, 0)} เกินเป้า`;
-      formattedGapTag = `🎉 เกินเป้า +${surplusPct.toFixed(1)}%`;
+      formattedGapTag = `เกินเป้า +${surplusPct.toFixed(1)}%`;
     }
   } else {
     remainingVal = target - current;
@@ -3806,12 +3815,12 @@ function renderGoalsWidget() {
         <!-- กล่องข้อมูลตัวเลขและเปอร์เซ็นต์สู่เป้าหมาย (Numbers & Percentages to reach goal) -->
         <div class="goal-metrics-grid">
           <div class="goal-metric-cell">
-            <span class="goal-metric-lbl">ทำได้แล้ว (Achieved)</span>
+            <span class="goal-metric-lbl">ทำได้แล้ว</span>
             <span class="goal-metric-val" style="color: var(--accent-emerald);">${prog.formattedCurrent}</span>
             <span class="goal-metric-gap-tag surplus">${prog.pct.toFixed(1)}%</span>
           </div>
           <div class="goal-metric-cell">
-            <span class="goal-metric-lbl">เป้าหมาย (Target)</span>
+            <span class="goal-metric-lbl">เป้าหมาย</span>
             <span class="goal-metric-val" style="color: var(--text-primary);">${prog.formattedTarget}</span>
             <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">เป้า 100%</span>
           </div>
@@ -3832,7 +3841,7 @@ function renderGoalsWidget() {
           </div>
         </div>
 
-        ${g.notes ? `<div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4;">💡 ${g.notes}</div>` : ''}
+        ${g.notes ? `<div class="goal-card-note">${g.notes}</div>` : ''}
 
         <div class="goal-details-row" onclick="event.stopPropagation()">
           <div class="goal-deadline-text">
@@ -3929,7 +3938,7 @@ window.openGoalChartModal = function(goalId) {
   const subGap = document.getElementById('gdetail-sub-gap');
 
   if (prog.isAchieved) {
-    lblGap.textContent = '🎉 ยอดที่เกินเป้าหมาย (Surplus)';
+    lblGap.textContent = 'ยอดที่เกินเป้าหมาย';
     valGap.style.color = 'var(--accent-emerald)';
     valGap.textContent = `+${goal.category === 'savings_rate' ? prog.surplusVal.toFixed(2) + '%' : formatCurrency(prog.surplusVal, 0)}`;
     subGap.textContent = `เกินเป้าหมายที่ตั้งไว้ +${(prog.pct - 100).toFixed(1)}%`;
@@ -4048,8 +4057,8 @@ function renderGoalPieChart() {
 
       const totalPie = prog.current;
       breakdownRows = [
-        { name: '🎯 เป้าหมายที่ตั้งไว้ (Target)', val: goal.category === 'savings_rate' ? prog.target.toFixed(2) + '%' : formatCurrency(prog.target, 0), pct: totalPie > 0 ? ((prog.target / totalPie) * 100).toFixed(1) + '%' : '100%' },
-        { name: '🎉 ยอดที่เกินเป้าหมาย (Surplus)', val: goal.category === 'savings_rate' ? `+${prog.surplusVal.toFixed(2)}%` : `+${formatCurrency(prog.surplusVal, 0)}`, pct: totalPie > 0 ? ((prog.surplusVal / totalPie) * 100).toFixed(1) + '%' : '0%' }
+        { name: 'เป้าหมายที่ตั้งไว้', val: goal.category === 'savings_rate' ? prog.target.toFixed(2) + '%' : formatCurrency(prog.target, 0), pct: totalPie > 0 ? ((prog.target / totalPie) * 100).toFixed(1) + '%' : '100%' },
+        { name: 'ยอดที่เกินเป้าหมาย', val: goal.category === 'savings_rate' ? `+${prog.surplusVal.toFixed(2)}%` : `+${formatCurrency(prog.surplusVal, 0)}`, pct: totalPie > 0 ? ((prog.surplusVal / totalPie) * 100).toFixed(1) + '%' : '0%' }
       ];
     } else {
       labels = ['ทำได้แล้ว (Achieved)', 'ยอดที่ยังขาดอีก (Gap to 100%)'];
@@ -4059,8 +4068,8 @@ function renderGoalPieChart() {
 
       const totalPie = prog.target;
       breakdownRows = [
-        { name: '🚀 ทำได้แล้ว (Achieved)', val: goal.category === 'savings_rate' ? prog.current.toFixed(2) + '%' : formatCurrency(prog.current, 0), pct: prog.pct.toFixed(1) + '%' },
-        { name: '⏳ ยอดที่ยังขาดอีก (Remaining)', val: goal.category === 'savings_rate' ? prog.remainingVal.toFixed(2) + '%' : formatCurrency(prog.remainingVal, 0), pct: prog.remainingPct.toFixed(1) + '%' }
+        { name: 'ทำได้แล้ว', val: goal.category === 'savings_rate' ? prog.current.toFixed(2) + '%' : formatCurrency(prog.current, 0), pct: prog.pct.toFixed(1) + '%' },
+        { name: 'ยอดที่ยังขาดอีก', val: goal.category === 'savings_rate' ? prog.remainingVal.toFixed(2) + '%' : formatCurrency(prog.remainingVal, 0), pct: prog.remainingPct.toFixed(1) + '%' }
       ];
     }
 
@@ -4280,7 +4289,7 @@ window.openAddGoalModal = function() {
   document.getElementById('goal-input-deadline').value = '2026-12-31';
   handleGoalCategoryChange();
 
-  if (modalTitle) modalTitle.textContent = 'เพิ่มเป้าหมายจัดซื้อใหม่ (New Strategic Goal)';
+  if (modalTitle) modalTitle.textContent = 'เพิ่มเป้าหมายจัดซื้อใหม่';
   modal.classList.add('active');
 };
 
@@ -4305,7 +4314,7 @@ window.openEditGoalModal = function(id) {
   document.getElementById('goal-input-notes').value = goal.notes || '';
 
   handleGoalCategoryChange();
-  if (modalTitle) modalTitle.textContent = 'แก้ไขเป้าหมายจัดซื้อ (Edit Strategic Goal)';
+  if (modalTitle) modalTitle.textContent = 'แก้ไขเป้าหมายจัดซื้อ';
   modal.classList.add('active');
 };
 

@@ -15,14 +15,16 @@
   --bg-dropdown: #162033;
   --bg-dropdown-hover: #1e2c45;
   --bg-glass: rgba(255, 255, 255, 0.03);
+  --bg-elevated: var(--bg-surface-elevated);
 
   --border-subtle: rgba(255, 255, 255, 0.12);
   --border-focus: #0284c7;
   --border-card: rgba(255, 255, 255, 0.09);
+  --border-accent: rgba(56, 189, 248, 0.45);
 
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #8391a8;
 
   /* สีประจำองค์กร QTC Energy */
   --qtc-blue: #00558f;
@@ -31,6 +33,9 @@
   --qtc-orange-light: #ff7844;
 
   --accent-primary: #0284c7;
+  --accent-primary-light: #38bdf8;
+  --accent-blue: var(--accent-primary);
+  --accent-blue-bg: rgba(2, 132, 199, 0.12);
   --accent-primary-hover: #0369a1;
   --accent-emerald: #10b981;
   --accent-emerald-bg: rgba(16, 185, 129, 0.12);
@@ -59,8 +64,8 @@
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
 
-  --font-main: 'Prompt', 'Plus Jakarta Sans', sans-serif;
-  --font-display: 'Prompt', 'Outfit', sans-serif;
+  --font-main: 'Prompt', sans-serif;
+  --font-display: 'Prompt', sans-serif;
 
   --ease-gentle: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
@@ -92,19 +97,31 @@
   --bg-dropdown: #ffffff;
   --bg-dropdown-hover: #f1f5f9;
   --bg-glass: rgba(0, 0, 0, 0.02);
+  --bg-elevated: var(--bg-surface-elevated);
 
   --border-subtle: #cbd5e1;
   --border-card: rgba(0, 0, 0, 0.08);
   --border-focus: #0284c7;
+  --border-accent: rgba(2, 132, 199, 0.42);
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-muted: #64748b;
+
+  --accent-primary: #0369a1;
+  --accent-primary-hover: #075985;
+  --accent-emerald: #047857;
+  --accent-orange: #c2410c;
+  --accent-cyan: #0e7490;
+  --accent-amber: #a16207;
+  --accent-rose: #be123c;
+  --qtc-orange: #c2410c;
 
   --accent-emerald-bg: rgba(16, 185, 129, 0.08);
   --accent-orange-bg: rgba(241, 90, 41, 0.08);
   --accent-amber-bg: rgba(245, 158, 11, 0.08);
   --accent-rose-bg: rgba(244, 63, 94, 0.08);
+  --accent-primary-light: #0369a1;
 
   --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.03);
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.06);
@@ -2610,6 +2627,333 @@ html, body {
   border-color: rgba(16, 185, 129, 0.4);
   color: #10b981;
   background: rgba(16, 185, 129, 0.08);
+}
+
+/* Enterprise UI coherence layer */
+body {
+  font-size: 14px;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent-primary) 72%, white);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100001;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-primary);
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-150%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.sidebar,
+.topbar,
+.kpi-card,
+.card-box,
+.goal-card,
+.goals-summary-banner,
+.calc-card-box,
+.table-wrap {
+  backdrop-filter: none;
+}
+
+.sidebar-header {
+  padding: 18px 16px 16px;
+}
+
+.logo-box {
+  box-shadow: none;
+  border-color: var(--border-card);
+}
+
+.company-name {
+  font-size: 13.5px;
+  letter-spacing: 0;
+}
+
+.system-tag,
+.user-meta .user-role,
+.nav-label {
+  font-size: 11px;
+}
+
+.nav-item {
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.nav-item:hover,
+.nav-item:active {
+  transform: none;
+}
+
+.nav-item.active {
+  border-left-width: 2px;
+  box-shadow: none;
+}
+
+.topbar {
+  padding: 12px 24px;
+  background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.page-title h2 {
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.page-title p {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.topbar-right {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.filter-pills {
+  flex-wrap: nowrap;
+}
+
+.pill-btn {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.pill-btn.active,
+.btn-action-primary {
+  box-shadow: none;
+}
+
+.icon-btn {
+  width: 38px;
+  height: 38px;
+}
+
+.content-container {
+  padding: 24px 24px 40px;
+}
+
+.view-section.active,
+.kpi-card,
+.goal-card,
+.quick-insight-banner {
+  animation-duration: 180ms;
+}
+
+.quick-insight-banner {
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  background-image: none;
+  border-color: var(--border-card);
+  border-left: 3px solid var(--qtc-orange);
+  box-shadow: none;
+}
+
+.quick-insight-banner:hover {
+  border-color: var(--border-card);
+  border-left-color: var(--qtc-orange);
+  box-shadow: none;
+}
+
+.quick-insight-badge {
+  background: var(--qtc-orange);
+  box-shadow: none;
+  font-size: 10.5px;
+}
+
+.quick-insight-text {
+  font-size: 12.5px;
+}
+
+.insight-chip {
+  min-height: 26px;
+  font-size: 11px;
+}
+
+.kpi-grid {
+  gap: 14px;
+}
+
+.kpi-card,
+.card-box,
+.goal-card,
+.goals-summary-banner,
+.calc-card-box,
+.table-wrap {
+  background-image: none;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.kpi-card {
+  min-height: 146px;
+  padding: 18px;
+  border-top: 3px solid var(--accent-primary);
+}
+
+.kpi-card.accent-glow-emerald { border-top-color: var(--accent-emerald); }
+.kpi-card.accent-glow-orange { border-top-color: var(--qtc-orange); }
+.kpi-card.accent-glow-amber { border-top-color: var(--accent-amber); }
+
+.kpi-card:hover,
+.card-box:hover,
+.goal-card:hover,
+.goal-card.achieved:hover,
+.goal-card.at-risk:hover {
+  transform: none;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
+}
+
+.kpi-card-title,
+.card-header-sub,
+.kpi-card-subtext {
+  font-size: 12px;
+}
+
+.kpi-card-value,
+.goal-metric-val,
+.goals-mini-stat-value,
+.styled-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card-value {
+  font-size: clamp(20px, 1.8vw, 25px);
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.kpi-card-footer,
+.kpi-badge,
+.tier-tag {
+  font-size: 11px;
+}
+
+.card-header-title {
+  font-size: 15px;
+}
+
+.btn-action {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+.btn-action:hover,
+.btn-action:active {
+  transform: none;
+}
+
+.goal-card {
+  animation-delay: 0ms !important;
+}
+
+.goal-card-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.goal-metric-lbl {
+  font-size: 11px;
+}
+
+.styled-table th {
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.styled-table td {
+  font-size: 12.5px;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    width: 100%;
+  }
+
+  .topbar-right {
+    justify-content: flex-start;
+  }
+
+  .filter-pills {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .content-container {
+    padding: 16px 12px 32px;
+  }
+
+  .page-title h2 {
+    font-size: 17px;
+  }
+
+  .quick-insight-banner {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .quick-insight-left,
+  .quick-insight-text {
+    width: 100%;
+  }
+
+  .quick-insight-text {
+    flex-basis: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .quick-insight-chips {
+    padding-bottom: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 

@@ -23,6 +23,7 @@ assert.deepEqual(JSON.parse(js.slice('window.KPI_DATA = '.length).replace(/;\s*$
 
 const app = fs.readFileSync('app.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const css = fs.readFileSync('styles.css', 'utf8');
 assert.ok(app.includes(`const LIVE_SHEET_URL = '${expectedUrl}'`), 'public page source is not pinned to the real sheet');
 assert.match(app, /if \(IS_GITHUB_PAGES\) return window\.syncGoogleSheetNow\(showFeedback\)/, 'public refresh still calls the backend');
 assert.match(app, /if \(IS_GITHUB_PAGES\) \{[\s\S]*?Static fallback data failed:[\s\S]*?return;[\s\S]*?\/api\/data/, 'public initial load can still call the backend');
@@ -30,5 +31,11 @@ assert.match(app, /const saved = IS_GITHUB_PAGES \? null : localStorage\.getItem
 assert.match(html, /id="gsheet-quality-summary"/, 'data quality summary missing');
 assert.match(html, /id="excel-dropzone"[\s\S]*?data-static-hide|data-static-hide[\s\S]*?id="excel-dropzone"/, 'public upload controls are not hidden');
 assert.match(html, /id="target-rate-badge"[\s\S]*?data-static-hide|data-static-hide[\s\S]*?id="target-rate-badge"/, 'public target controls are not hidden');
+
+const definedTokens = new Set([...css.matchAll(/--([\w-]+)\s*:/g)].map(match => match[1]));
+const usedTokens = new Set([...css.matchAll(/var\(--([\w-]+)/g)].map(match => match[1]));
+assert.deepEqual([...usedTokens].filter(token => !definedTokens.has(token)), [], 'undefined CSS design token');
+assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, 'reduced-motion support missing');
+assert.match(css, /:focus-visible/, 'keyboard focus style missing');
 
 console.log(`Data valid: ${transactions.length} transactions; source gid=543596522.`);
