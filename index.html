@@ -365,8 +365,13 @@
                   <div class="card-header-sub">มูลค่าจำแนกตามวิธีและกลยุทธ์</div>
                 </div>
               </div>
-              <div class="chart-canvas-box" style="min-height: 180px;">
-                <canvas id="strategyDonutChart"></canvas>
+              <div class="chart-canvas-box strategy-chart-box" style="min-height: 180px;">
+                <canvas id="strategyDonutChart" role="img" aria-describedby="strategy-chart-summary"></canvas>
+                <div class="donut-center" aria-hidden="true">
+                  <strong id="strategy-chart-total">฿0</strong>
+                  <span>ลดต้นทุนรวม</span>
+                </div>
+                <p class="sr-only" id="strategy-chart-summary"></p>
               </div>
               <div class="strategy-compact-list" id="strategy-breakdown-list"></div>
             </div>
@@ -506,11 +511,12 @@
               <div class="card-header-bar">
                 <div>
                   <div class="card-header-title">แนวโน้มการลดต้นทุนสะสมรายปี (2023 - 2026)</div>
-                  <div class="card-header-sub">เปรียบเทียบมูลค่าผลประหยัดต้นทุนในแต่ละปี (ล้านบาท)</div>
+                  <div class="card-header-sub" id="multi-year-chart-subtitle">เปรียบเทียบผลลดต้นทุนจริงกับเป้าหมายในแต่ละปี</div>
                 </div>
               </div>
               <div class="chart-canvas-box">
-                <canvas id="multiYearChart"></canvas>
+                <canvas id="multiYearChart" role="img" aria-describedby="multi-year-chart-summary"></canvas>
+                <p class="sr-only" id="multi-year-chart-summary"></p>
               </div>
             </div>
 

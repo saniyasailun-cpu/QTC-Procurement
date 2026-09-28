@@ -1244,8 +1244,18 @@ function renderStrategyDonutChart(scopedTxs) {
   const sortedKeys = Object.keys(stratMap).sort((a, b) => stratMap[b] - stratMap[a]);
   const labels = sortedKeys.map(k => THAI_STRATEGIES[k] || k);
   const dataValues = sortedKeys.map(k => stratMap[k]);
+  const total = dataValues.reduce((a, b) => a + b, 0);
 
   const colors = sortedKeys.map((k, idx) => STRATEGY_COLOR_MAP[k] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length]);
+  const totalEl = document.getElementById('strategy-chart-total');
+  const summaryEl = document.getElementById('strategy-chart-summary');
+  if (totalEl) totalEl.textContent = formatCurrency(total, 0);
+  if (summaryEl) {
+    const topStrategy = sortedKeys[0];
+    summaryEl.textContent = total > 0
+      ? `ผลลดต้นทุนรวม ${formatCurrency(total)} กลยุทธ์สูงสุด ${THAI_STRATEGIES[topStrategy] || topStrategy} ${formatCurrency(stratMap[topStrategy])}`
+      : 'ยังไม่มีข้อมูลกลยุทธ์สำหรับช่วงเวลาที่เลือก';
+  }
 
   if (State.charts.strategyDonut) {
     State.charts.strategyDonut.destroy();
@@ -1267,6 +1277,7 @@ function renderStrategyDonutChart(scopedTxs) {
       responsive: true,
       maintainAspectRatio: false,
       cutout: '72%',
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 350 },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1278,12 +1289,12 @@ function renderStrategyDonutChart(scopedTxs) {
     }
   });
 
-  const total = dataValues.reduce((a, b) => a + b, 0) || 1;
+  const safeTotal = total || 1;
   const listEl = document.getElementById('strategy-breakdown-list');
   if (listEl) {
     listEl.innerHTML = sortedKeys.map((k, idx) => {
       const amt = stratMap[k];
-      const pct = ((amt / total) * 100).toFixed(1);
+      const pct = ((amt / safeTotal) * 100).toFixed(1);
       const nameThai = THAI_STRATEGIES[k] || k;
       const dotColor = colors[idx] || DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length];
       return `
@@ -1381,7 +1392,13 @@ function renderMonthlyKPITracking() {
   const creditTbody = document.getElementById('credit-extension-tbody');
   if (!tbody) return;
 
-  const monthlyAgg = getMonthlyAggregatedData();
+  const rawMonthlyAgg = getMonthlyAggregatedData();
+  const selectedMonths = State.activeMonth && State.activeMonth !== 'ALL'
+    ? [State.activeMonth]
+    : (State.activeQuarter && State.activeQuarter !== 'ALL' ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER) : MONTH_ORDER);
+  const monthlyAgg = selectedMonths.length === MONTH_ORDER.length
+    ? rawMonthlyAgg
+    : rawMonthlyAgg.filter(row => selectedMonths.includes(row.month));
   let totalPV = 0;
   let totalCR = 0;
   let totalTarget = 0;
@@ -1419,7 +1436,7 @@ function renderMonthlyKPITracking() {
   const isTotalPassed = totalActualPct >= State.targetRate;
   tbody.innerHTML += `
     <tr style="background: var(--bg-glass); font-weight: 700;">
-      <td>รวมทั้งปี (GRAND TOTAL)</td>
+      <td>${monthlyAgg.length === MONTH_ORDER.length ? 'รวมทั้งปี' : 'รวมช่วงที่เลือก'} (GRAND TOTAL)</td>
       <td>${formatCurrency(totalPV)}</td>
       <td class="highlight-col">${formatCurrency(totalCR)}</td>
       <td>${formatCurrency(totalTarget)}</td>
@@ -1469,22 +1486,31 @@ function renderMultiYearChart() {
   if (!ctx) return;
 
   const years = ['2023', '2024', '2025', '2026'];
+  const selectedMonths = State.activeMonth && State.activeMonth !== 'ALL'
+    ? [State.activeMonth]
+    : (State.activeQuarter && State.activeQuarter !== 'ALL' ? (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER) : MONTH_ORDER);
+  const isFullYear = selectedMonths.length === MONTH_ORDER.length;
+  const scopeLabel = State.activeMonth && State.activeMonth !== 'ALL'
+    ? THAI_MONTHS[State.activeMonth]
+    : (State.activeQuarter && State.activeQuarter !== 'ALL' ? `ไตรมาส ${State.activeQuarter}` : 'ทั้งปี');
   const multiYearData = years.map(yr => {
-    const txs = State.transactions.filter(t => t.year === yr);
+    const txs = State.transactions.filter(t => t.year === yr && selectedMonths.includes(t.month));
     let saving = txs.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
-    
+
     let purchase = 0;
     if (yr === '2026' && State.data?.monthlySummary) {
-      purchase = State.data.monthlySummary.reduce((sum, m) => sum + (Number(m.pv2026) || 0), 0);
+      purchase = State.data.monthlySummary
+        .filter(m => selectedMonths.includes(String(m.month || '').toUpperCase()))
+        .reduce((sum, m) => sum + (Number(m.pv2026) || 0), 0);
     } else if (State.data?.purchaseHistory) {
-      const phs = State.data.purchaseHistory.filter(p => p.year === yr);
+      const phs = State.data.purchaseHistory.filter(p => p.year === yr && selectedMonths.includes(String(p.month || '').toUpperCase()));
       purchase = phs.reduce((sum, p) => sum + (Number(p.purchaseValue) || 0), 0);
     }
     if (purchase === 0) {
       purchase = txs.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
     }
-    
-    const ys = State.data?.yearlySummary?.find(y => y.year === yr);
+
+    const ys = isFullYear ? State.data?.yearlySummary?.find(y => y.year === yr) : null;
     if (ys) {
       if (saving === 0 && ys.costSaving > 0) saving = ys.costSaving;
       if (purchase === 0 && ys.purchaseValue > 0) purchase = ys.purchaseValue;
@@ -1492,15 +1518,23 @@ function renderMultiYearChart() {
 
     return {
       year: yr,
-      purchaseMB: Number((purchase / 1000000).toFixed(2)),
-      savingMB: Number((saving / 1000000).toFixed(2)),
+      purchase,
+      saving,
+      target: purchase * State.targetRate,
+      savingMB: saving / 1000000,
       pct: purchase > 0 ? ((saving / purchase) * 100).toFixed(2) : '0.00'
     };
   });
 
   const labels = multiYearData.map(y => formatYearBE(y.year));
-  const purchaseValues = multiYearData.map(y => y.purchaseMB);
   const savingsValues = multiYearData.map(y => y.savingMB);
+  const targetValues = multiYearData.map(y => y.target / 1000000);
+  const subtitleEl = document.getElementById('multi-year-chart-subtitle');
+  const summaryEl = document.getElementById('multi-year-chart-summary');
+  if (subtitleEl) subtitleEl.textContent = `ผลลดต้นทุนจริงเทียบเป้าหมาย ${(State.targetRate * 100).toFixed(1)}% · ${scopeLabel}`;
+  if (summaryEl) {
+    summaryEl.textContent = `เปรียบเทียบ ${scopeLabel}: ${multiYearData.map(item => `${formatYearBE(item.year)} ลดต้นทุน ${formatCurrency(item.saving)} เป้าหมาย ${formatCurrency(item.target)}`).join(', ')}`;
+  }
 
   if (State.charts.multiYear) {
     State.charts.multiYear.destroy();
@@ -1509,6 +1543,9 @@ function renderMultiYearChart() {
   const isDark = State.theme === 'dark';
   const textColor = isDark ? '#94a3b8' : '#475569';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
+  const rootStyles = getComputedStyle(document.documentElement);
+  const actualColor = rootStyles.getPropertyValue('--accent-primary').trim() || '#0284c7';
+  const targetColor = rootStyles.getPropertyValue('--qtc-orange').trim() || '#f97316';
 
   State.charts.multiYear = new Chart(ctx, {
     type: 'bar',
@@ -1517,45 +1554,47 @@ function renderMultiYearChart() {
       datasets: [
         {
           type: 'bar',
-          label: 'มูลค่าการสั่งซื้อรวม (ล้านบาท)',
-          data: purchaseValues,
-          backgroundColor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.18)',
-          borderColor: isDark ? '#38bdf8' : '#0284c7',
-          borderWidth: 1.5,
-          borderRadius: 8,
-          yAxisID: 'y',
-          order: 2
+          label: 'ลดต้นทุนจริง',
+          data: savingsValues,
+          backgroundColor: actualColor,
+          borderRadius: 6,
+          borderSkipped: false,
+          maxBarThickness: 52,
+          order: 1
         },
         {
           type: 'line',
-          label: 'มูลค่าผลประหยัดต้นทุน (ล้านบาท)',
-          data: savingsValues,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-          fill: true,
-          tension: 0.3,
-          borderWidth: 3,
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          pointBackgroundColor: '#10b981',
+          label: `เป้าหมาย ${(State.targetRate * 100).toFixed(1)}%`,
+          data: targetValues,
+          borderColor: targetColor,
+          borderDash: [7, 5],
+          fill: false,
+          tension: 0.2,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointStyle: 'rectRot',
+          pointHoverRadius: 7,
+          pointBackgroundColor: targetColor,
           pointBorderColor: isDark ? '#0f172a' : '#ffffff',
-          pointBorderWidth: 2,
-          yAxisID: 'y1',
-          order: 1
+          pointBorderWidth: 1.5,
+          order: 2
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 350 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
           position: 'top',
+          align: 'start',
           labels: {
             color: textColor,
             font: { family: 'Prompt', size: 12, weight: '500' },
-            boxWidth: 14,
+            usePointStyle: true,
+            pointStyleWidth: 12,
             padding: 15
           }
         },
@@ -1567,15 +1606,19 @@ function renderMultiYearChart() {
           borderWidth: 1,
           padding: 12,
           callbacks: {
+            label: (context) => {
+              const item = multiYearData[context.dataIndex];
+              const value = context.datasetIndex === 0 ? item.saving : item.target;
+              return ` ${context.dataset.label}: ${formatCurrency(value)}`;
+            },
             afterBody: (items) => {
               const idx = items[0]?.dataIndex;
               const item = multiYearData[idx];
               if (item) {
-                return `อัตราการประหยัด: ${item.pct}% ของยอดจัดซื้อ`;
+                return [`มูลค่าสั่งซื้อ: ${formatCurrency(item.purchase)}`, `อัตราลดต้นทุน: ${item.pct}%`];
               }
-              return '';
-            },
-            label: (c) => ` ${c.dataset.label}: ฿${c.raw} ล้านบาท`
+              return [];
+            }
           }
         }
       },
@@ -1590,7 +1633,7 @@ function renderMultiYearChart() {
           beginAtZero: true,
           title: {
             display: true,
-            text: 'มูลค่าสั่งซื้อ (ล้านบาท)',
+            text: 'มูลค่าลดต้นทุน (ล้านบาท)',
             color: textColor,
             font: { family: 'Prompt', size: 11, weight: '600' }
           },
@@ -1599,22 +1642,6 @@ function renderMultiYearChart() {
             callback: (val) => `${val}M`
           },
           grid: { color: gridColor }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'ผลประหยัดต้นทุน (ล้านบาท)',
-            color: textColor,
-            font: { family: 'Prompt', size: 11, weight: '600' }
-          },
-          ticks: {
-            color: textColor,
-            callback: (val) => `${val}M`
-          },
-          grid: { display: false }
         }
       }
     }

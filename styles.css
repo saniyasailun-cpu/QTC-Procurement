@@ -3030,6 +3030,34 @@ textarea {
   height: 300px;
 }
 
+.strategy-chart-box {
+  height: 250px;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  width: 42%;
+  translate: -50% -50%;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut-center strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-center span {
+  color: var(--text-secondary);
+  font-size: 9.5px;
+}
+
 @media (max-width: 600px) {
   .card-header-bar {
     align-items: flex-start;

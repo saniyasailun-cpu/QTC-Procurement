@@ -38,7 +38,11 @@ assert.deepEqual([...usedTokens].filter(token => !definedTokens.has(token)), [],
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, 'reduced-motion support missing');
 assert.match(css, /:focus-visible/, 'keyboard focus style missing');
 assert.match(html, /id="monthly-chart-summary"/, 'monthly chart text summary missing');
+assert.match(html, /id="strategy-chart-summary"/, 'strategy chart text summary missing');
+assert.match(html, /id="multi-year-chart-summary"/, 'multi-year chart text summary missing');
 assert.match(app, /animation: chartAnimation/, 'monthly chart does not respect reduced motion');
 assert.match(app, /มูลค่าสั่งซื้อ:.*formatCurrency\(row\.pv\)/, 'monthly chart exact purchase value missing');
+assert.match(app, /t\.year === yr && selectedMonths\.includes\(t\.month\)/, 'multi-year chart ignores the selected month');
+assert.match(app, /รวมช่วงที่เลือก/, 'monthly KPI table ignores the selected month');
 
 console.log(`Data valid: ${transactions.length} transactions; source gid=543596522.`);
