@@ -3095,7 +3095,8 @@ textarea {
 #view-dashboard .card-header-title { font-size: 17px; line-height: 1.5; }
 #view-dashboard .card-header-sub { font-size: 12px; margin-top: 5px; }
 #view-dashboard .chart-summary-grid { background: transparent; padding-inline: 0; }
-#view-dashboard .chart-summary-item { background: transparent; padding: 12px 0; }
+#view-dashboard .chart-summary-item { background: transparent; padding: 12px 14px; }
+#view-dashboard .monthly-chart-box.is-single-month { height: 220px; }
 #view-dashboard .chart-summary-item strong { font-size: 16px; }
 #view-dashboard .chart-status-badge { white-space: normal; }
 #view-dashboard .strategy-chart-box { height: 230px; }
@@ -3148,7 +3149,7 @@ body.presentation-focus .monthly-chart-box { height: 380px; }
   }
 
   .chart-summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .chart-summary-item {

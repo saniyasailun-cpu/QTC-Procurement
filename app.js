@@ -970,6 +970,8 @@ function renderMonthlyTrendChart() {
     : rawMonthlyAgg;
 
   const monthLabelsThai = monthlyAgg.map(r => THAI_MONTHS_SHORT[r.month] || r.month);
+  const singleMonth = monthlyAgg.length === 1;
+  ctx.canvas.parentElement.classList.toggle('is-single-month', singleMonth);
 
   const totalPurchase = monthlyAgg.reduce((sum, row) => sum + row.pv, 0);
   const totalActual = monthlyAgg.reduce((sum, row) => sum + row.cr, 0);
@@ -1012,7 +1014,7 @@ function renderMonthlyTrendChart() {
   const chartAnimation = reducedMotion ? false : { duration: 350, easing: 'easeOutQuart' };
   const axisNumber = value => Number(value).toLocaleString('th-TH', { maximumFractionDigits: 1 });
 
-  if (State.chartMode === 'bar') {
+  if (State.chartMode === 'bar' || singleMonth) {
     const costReductionMB = monthlyAgg.map(r => {
       if (r.pv === 0 && r.cr === 0) return null;
       return r.cr / 1000000;
@@ -1038,9 +1040,13 @@ function renderMonthlyTrendChart() {
             order: 1
           },
           {
-            type: 'line',
+            type: singleMonth ? 'bar' : 'line',
             label: `เป้าหมาย ${(State.targetRate * 100).toFixed(1)}%`,
             data: targetSavingsMB,
+            backgroundColor: targetColor,
+            borderRadius: 5,
+            borderSkipped: false,
+            maxBarThickness: 34,
             borderColor: targetColor,
             borderWidth: 2.5,
             borderDash: [7, 5],
@@ -1055,6 +1061,7 @@ function renderMonthlyTrendChart() {
         ]
       },
       options: {
+        indexAxis: singleMonth ? 'y' : 'x',
         responsive: true,
         maintainAspectRatio: false,
         animation: chartAnimation,
@@ -1104,13 +1111,14 @@ function renderMonthlyTrendChart() {
           }
         },
         scales: {
-          x: {
+          [singleMonth ? 'y' : 'x']: {
             ticks: { color: textColor, font: { family: 'Prompt', size: 11 } },
             grid: { display: false }
           },
-          y: {
+          [singleMonth ? 'x' : 'y']: {
             type: 'linear',
-            position: 'left',
+            position: singleMonth ? 'bottom' : 'left',
+            beginAtZero: true,
             suggestedMin: minSaving < 0 ? minSaving * 1.15 : 0,
             title: {
               display: true,
