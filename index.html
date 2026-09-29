@@ -152,6 +152,17 @@
         </div>
 
         <div class="topbar-right">
+          <div class="presentation-period">
+            <label for="presentation-year">ปีรายงาน</label>
+            <select id="presentation-year" onchange="document.querySelector('[data-year=&quot;'+this.value+'&quot;]').click()">
+              <option value="2026">2569 / 2026</option><option value="2025">2568 / 2025</option><option value="2024">2567 / 2024</option><option value="2023">2566 / 2023</option><option value="ALL">ทุกปี</option>
+            </select>
+            <label for="presentation-month">ช่วงเวลา</label>
+            <select id="presentation-month" onchange="document.querySelector('[data-month=&quot;'+this.value+'&quot;]').click()">
+              <option value="ALL">ภาพรวมทั้งปี</option><option value="JAN">มกราคม</option><option value="FEB">กุมภาพันธ์</option><option value="MAR">มีนาคม</option><option value="APR">เมษายน</option><option value="MAY">พฤษภาคม</option><option value="JUN">มิถุนายน</option><option value="JUL">กรกฎาคม</option><option value="AUG">สิงหาคม</option><option value="SEP">กันยายน</option><option value="OCT">ตุลาคม</option><option value="NOV">พฤศจิกายน</option><option value="DEC">ธันวาคม</option>
+            </select>
+          </div>
+          <button class="btn-action btn-action-secondary" id="presentation-toggle" aria-pressed="false" onclick="togglePresentation()">โหมดนำเสนอ</button>
           <!-- ตัวกรองปี -->
           <div class="filter-pills" id="year-filter-group">
             <button class="pill-btn active" data-year="2026">ปี 2569 (2026)</button>
@@ -201,30 +212,14 @@
 
         <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
         <section class="view-section active" id="view-dashboard">
-          <p id="workbook-dashboard-status" role="status" hidden></p>
-          <!-- กล่องสรุปวิเคราะห์ด่วนอัจฉริยะแบบกะทัดรัด (Compact Quick Insight Bar) -->
-          <div class="quick-insight-banner compact" id="quick-insight-box">
-            <div class="quick-insight-left">
-              <span class="quick-insight-badge">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-                สรุปสำคัญ
-              </span>
-              <span class="quick-insight-scope" id="quick-insight-scope">ปี 2569</span>
+          <div class="presentation-heading">
+            <div><span class="presentation-eyebrow">QTC ENERGY / PROCUREMENT PERFORMANCE</span>
+              <h1>ทุกการต่อรอง สร้างคุณค่า</h1>
+              <p>ผลลดต้นทุนจัดซื้อ · ข้อมูลจริงจาก Google Sheets</p>
             </div>
-            <div class="quick-insight-text" id="quick-insight-summary">
-              กำลังวิเคราะห์ข้อมูลการเปลี่ยนแปลง KPI สำคัญ...
-            </div>
-            <div class="quick-insight-chips" id="quick-insight-chips">
-              <!-- Dynamic metric chips rendered by app.js -->
-            </div>
-            <button class="quick-insight-refresh-btn" onclick="renderQuickInsight(true)" title="วิเคราะห์สรุปข้อมูลใหม่ (Re-evaluate)" aria-label="วิเคราะห์สรุปข้อมูลใหม่">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-              </svg>
-            </button>
+            <button class="btn-action btn-action-secondary" onclick="switchView('kpi-tracking')">ดูรายงานฉบับเต็ม <span aria-hidden="true">↗</span></button>
           </div>
+          <details class="source-disclosure"><summary>แหล่งข้อมูลและสถานะการตรวจสอบ</summary><p id="workbook-dashboard-status" role="status" hidden></p></details>
 
           <!-- 4 การ์ดสรุป KPI ด้านบน -->
           <div class="kpi-grid">
@@ -285,7 +280,7 @@
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 </div>
               </div>
-              <div class="kpi-card-value" id="kpi-credit-savings">฿85,669.64</div>
+              <div class="kpi-card-value" id="kpi-credit-savings">—</div>
               <div class="kpi-card-footer">
                 <span class="kpi-card-subtext">ดอกเบี้ย 4.25% ต่อปี</span>
                 <span class="kpi-badge success">ลดต้นทุนทางบัญชี</span>
@@ -293,29 +288,6 @@
             </div>
           </div>
 
-          <!-- แถบติดตามเป้าหมายยุทธศาสตร์ (Strategic Goals Overview) -->
-          <div class="card-box" style="margin-bottom: 20px;">
-            <div class="card-header-bar">
-              <div>
-                <div class="card-header-title">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="6" r="3"/><path d="m9 12 2 2 4-4"/></svg>
-                  เป้าหมายและแผนยุทธศาสตร์จัดซื้อ
-                </div>
-                <div class="card-header-sub" id="dashboard-goals-sub">ติดตามความคืบหน้าเทียบเป้าหมายองค์กรและเป้าหมายรายบุคคล</div>
-              </div>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <button class="btn-action btn-action-primary" onclick="openAddGoalModal()" data-static-hide style="font-size: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 4px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  เพิ่มเป้าหมาย
-                </button>
-                <button class="btn-action btn-action-secondary" onclick="switchView('goals')" style="font-size: 12px; padding: 6px 10px;">
-                  ดูเป้าหมายทั้งหมด
-                </button>
-              </div>
-            </div>
-            
-            <div class="goal-cards-grid" id="dashboard-goal-cards"></div>
-          </div>
 
           <!-- แถวชาร์ตหลัก: สลับดูกราฟรายเดือน vs กราฟสะสม S-Curve -->
           <div class="main-charts-row">
@@ -378,7 +350,59 @@
             </div>
           </div>
 
+          <!-- Supporting context stays below the presentation charts. -->
+          <!-- กล่องสรุปวิเคราะห์ด่วนอัจฉริยะแบบกะทัดรัด (Compact Quick Insight Bar) -->
+          <div class="quick-insight-banner compact" id="quick-insight-box">
+            <div class="quick-insight-left">
+              <span class="quick-insight-badge">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                สรุปสำคัญ
+              </span>
+              <span class="quick-insight-scope" id="quick-insight-scope">ปี 2569</span>
+            </div>
+            <div class="quick-insight-text" id="quick-insight-summary">
+              กำลังวิเคราะห์ข้อมูลการเปลี่ยนแปลง KPI สำคัญ...
+            </div>
+            <div class="quick-insight-chips" id="quick-insight-chips">
+              <!-- Dynamic metric chips rendered by app.js -->
+            </div>
+            <button class="quick-insight-refresh-btn" onclick="renderQuickInsight(true)" title="วิเคราะห์สรุปข้อมูลใหม่ (Re-evaluate)" aria-label="วิเคราะห์สรุปข้อมูลใหม่">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- แถบติดตามเป้าหมายยุทธศาสตร์ (Strategic Goals Overview) -->
+          <details class="presentation-details" id="dashboard-goals-details">
+            <summary>เป้าหมายและแผนยุทธศาสตร์ <span>ดูความคืบหน้า</span></summary>
+          <div class="card-box" style="margin-bottom: 20px;">
+            <div class="card-header-bar">
+              <div>
+                <div class="card-header-title">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="6" r="3"/><path d="m9 12 2 2 4-4"/></svg>
+                  เป้าหมายและแผนยุทธศาสตร์จัดซื้อ
+                </div>
+                <div class="card-header-sub" id="dashboard-goals-sub">ติดตามความคืบหน้าเทียบเป้าหมายองค์กรและเป้าหมายรายบุคคล</div>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn-action btn-action-primary" onclick="openAddGoalModal()" data-static-hide style="font-size: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 4px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  เพิ่มเป้าหมาย
+                </button>
+                <button class="btn-action btn-action-secondary" onclick="switchView('goals')" style="font-size: 12px; padding: 6px 10px;">
+                  ดูเป้าหมายทั้งหมด
+                </button>
+              </div>
+            </div>
+            <div class="goal-cards-grid" id="dashboard-goal-cards"></div>
+          </div>
+          </details>
           <!-- แถวที่ 2: สรุปผลงานทีม และ 5 อันดับซัพพลายเออร์ -->
+          <details class="presentation-details">
+            <summary>ทีมงานและคู่ค้าที่สร้างผลงาน <span>ดูอันดับและรายละเอียด</span></summary>
           <div class="two-column-row">
             <!-- ทีมจัดซื้อ -->
             <div class="card-box">
@@ -410,6 +434,7 @@
               <div class="pic-compact-list" id="top-suppliers-list"></div>
             </div>
           </div>
+          </details>
         </section>
 
         <!-- ================= VIEW 8: เป้าหมาย & แผนยุทธศาสตร์ (GOALS & TARGETS) ================= -->

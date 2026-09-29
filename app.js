@@ -451,12 +451,21 @@ function switchView(viewName) {
 }
 
 // ตัวกรองเลือกปีและไตรมาส
+window.togglePresentation = function() {
+  const active = document.body.classList.toggle('presentation-focus');
+  const button = document.getElementById('presentation-toggle');
+  button.setAttribute('aria-pressed', String(active));
+  button.textContent = active ? 'ออกจากโหมดนำเสนอ' : 'โหมดนำเสนอ';
+  requestAnimationFrame(() => Object.values(State.charts).forEach(chart => chart?.resize()));
+};
+
 function initFilterPills() {
   document.querySelectorAll('#year-filter-group .pill-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#year-filter-group .pill-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       State.activeYear = btn.getAttribute('data-year');
+      document.getElementById('presentation-year').value = State.activeYear;
       renderAllViews();
     });
   });
@@ -467,6 +476,7 @@ function initFilterPills() {
       document.querySelectorAll('#month-filter-group .pill-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       State.activeMonth = btn.getAttribute('data-month');
+      document.getElementById('presentation-month').value = State.activeMonth;
       renderAllViews();
     });
   });
@@ -607,37 +617,11 @@ function formatPercent(num, decimals = 2) {
   return (Number(num) * 100).toFixed(decimals) + '%';
 }
 
-function animateValue(id, endValue, isCurrency = true, decimals = 2) {
+function setMetricValue(id, endValue, isCurrency = true, decimals = 2) {
   const el = document.getElementById(id);
   if (!el) return;
-  
-  const rawPrev = el.dataset.currVal;
-  cancelAnimationFrame(el._valueAnimationFrame);
-  const start = rawPrev !== undefined ? (parseFloat(rawPrev) || 0) : 0;
-  el.dataset.currVal = String(endValue);
-
-  const duration = 650;
-  const startTime = performance.now();
-
-  function update(currentTime) {
-    const elapsed = currentTime - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    // Cubic Out Easing curve for luxurious and low-cortisol smooth counting
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-    const currentVal = start + (endValue - start) * easeProgress;
-
-    if (isCurrency) el.textContent = formatCurrency(currentVal, decimals);
-    else el.textContent = (currentVal * 100).toFixed(decimals) + '%';
-
-    if (progress < 1) {
-      el._valueAnimationFrame = requestAnimationFrame(update);
-    } else {
-      if (isCurrency) el.textContent = formatCurrency(endValue, decimals);
-      else el.textContent = (endValue * 100).toFixed(decimals) + '%';
-    }
-  }
-
-  el._valueAnimationFrame = requestAnimationFrame(update);
+  // Financial figures must remain exact during filter changes and screen capture.
+  el.textContent = isCurrency ? formatCurrency(endValue, decimals) : (endValue * 100).toFixed(decimals) + '%';
 }
 
 // -------------------------------------------------------------
@@ -675,14 +659,13 @@ function renderExecutiveDashboard() {
   const targetRate = State.targetRate || 0.03;
   const isMet = savingRate >= targetRate;
 
-  animateValue('kpi-total-savings', totalSavings, true, 2);
+  setMetricValue('kpi-total-savings', totalSavings, true, 2);
   const purchaseUnavailable = State.data.workbookSource && (scopedMonthly.some(r => r.missingPurchase) || totalPurchase <= 0);
   if (purchaseUnavailable) {
     const purchaseEl = document.getElementById('kpi-total-purchase');
-    cancelAnimationFrame(purchaseEl._valueAnimationFrame);
     purchaseEl.textContent = '—';
   }
-  else animateValue('kpi-total-purchase', totalPurchase, true, 2);
+  else setMetricValue('kpi-total-purchase', totalPurchase, true, 2);
 
   document.getElementById('kpi-savings-mb').textContent = `${(totalSavings / 1000000).toFixed(2)} ล้านบาท`;
   document.getElementById('kpi-savings-rate').textContent = `+${(savingRate * 100).toFixed(2)}% ประหยัดได้`;
