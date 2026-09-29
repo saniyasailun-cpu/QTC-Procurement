@@ -12,9 +12,11 @@ assert.ok(transactions.every(t => Number(t.totalPrice) > 0), 'incomplete transac
 
 for (const summary of data.monthlySummary || []) {
   const monthRows = transactions.filter(t => String(t.year) === '2026' && t.month === summary.month);
-  const purchase = monthRows.reduce((sum, t) => sum + Number(t.totalPrice || 0), 0);
+  const sourcePeriod = data.workbookSource?.periods.find(p => p.year === '2026' && p.month === summary.month);
+  const purchase = sourcePeriod ? sourcePeriod.purchase : monthRows.reduce((sum, t) => sum + Number(t.totalPrice || 0), 0);
   const savings = monthRows.reduce((sum, t) => sum + Number(t.totalSaving || 0), 0);
-  assert.ok(Math.abs(purchase - Number(summary.pv2026 || 0)) < 0.01, `${summary.month} purchase mismatch`);
+  if (purchase === null) assert.equal(summary.pv2026, null, `${summary.month} missing purchase must stay unavailable`);
+  else assert.ok(Math.abs(purchase - Number(summary.pv2026 || 0)) < 0.01, `${summary.month} purchase mismatch`);
   assert.ok(Math.abs(savings - Number(summary.cr2026 || 0)) < 0.01, `${summary.month} savings mismatch`);
 }
 

@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "check:data": "node scripts/validate-data.mjs",
+    "check:workbook": "node scripts/check-workbook.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },

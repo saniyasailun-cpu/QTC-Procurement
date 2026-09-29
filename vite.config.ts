@@ -143,7 +143,7 @@ function staticDataPlugin(): Plugin {
   return {
     name: 'static-data-plugin',
     generateBundle() {
-      for (const fileName of ['app.js', 'data.js']) {
+      for (const fileName of ['app.js', 'data.js', 'workbook-sync.js']) {
         this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(fileName) });
       }
     },
@@ -152,6 +152,7 @@ function staticDataPlugin(): Plugin {
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [react(), tailwindcss(), backendApiPlugin(), staticDataPlugin()],
     resolve: {
       alias: {

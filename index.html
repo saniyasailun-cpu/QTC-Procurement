@@ -201,6 +201,7 @@
 
         <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
         <section class="view-section active" id="view-dashboard">
+          <p id="workbook-dashboard-status" role="status" hidden></p>
           <!-- กล่องสรุปวิเคราะห์ด่วนอัจฉริยะแบบกะทัดรัด (Compact Quick Insight Bar) -->
           <div class="quick-insight-banner compact" id="quick-insight-box">
             <div class="quick-insight-left">
@@ -834,6 +835,17 @@
 
         <!-- ================= VIEW 7: จัดการข้อมูล (DATA IMPORT/EXPORT) ================= -->
         <section class="view-section" id="view-data-import">
+          <div class="card-box" id="workbook-sources" hidden>
+            <h3>ข้อมูลจากทุกแท็บใน workbook</h3>
+            <p id="workbook-source-status" role="status"></p>
+            <p>ผลประหยัด: รายการ PO ที่สมบูรณ์ · มูลค่าซื้อรวม: มูลค่าซื้อ / สรุป-รายเดือน · สรุปอื่นใช้ตรวจสอบโดยไม่บวกซ้ำ</p>
+            <details><summary>ข้อแตกต่างและข้อผิดพลาดต้นทาง</summary><ul id="workbook-source-issues"></ul></details>
+            <label for="workbook-tab-select">เลือกแท็บต้นทาง</label>
+            <select id="workbook-tab-select" onchange="renderWorkbookTab()"></select>
+            <p id="workbook-tab-role"></p>
+            <div class="table-scroll" style="max-height:420px"><table class="styled-table" id="workbook-tab-table"></table></div>
+            <button class="btn-action" id="workbook-more-rows" onclick="renderWorkbookTab(true)">แสดงอีก 100 แถว</button>
+          </div>
           <!-- Google Sheets Live Sync Box -->
           <div class="card-box" style="margin-bottom: 20px; border-color: rgba(16, 185, 129, 0.4);">
             <div class="card-header-bar">
@@ -860,7 +872,7 @@
               <div data-static-hide style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
                 <input type="checkbox" id="gsheet-auto-sync" checked style="width: 16px; height: 16px; cursor: pointer;">
                 <label for="gsheet-auto-sync" style="font-size: 12px; color: var(--text-primary); cursor: pointer;">
-                  ซิงค์ข้อมูลสดอัตโนมัติทุกครั้งที่เปิดหน้านี้ (Auto Sync on Load)
+                  ซิงค์เมื่อเปิดหน้า และทุก 5 นาทีขณะเปิดดูหน้าเว็บ
                 </label>
               </div>
 
@@ -1221,6 +1233,7 @@
 
   <!-- โหลดสคริปต์ -->
   <script src="data.js"></script>
+  <script src="workbook-sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

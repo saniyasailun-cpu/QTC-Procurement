@@ -200,6 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTableEvents();
   initSupplierEvents();
   initSimulators();
+  applyWorkbookSimulatorInputs();
   if (!IS_GITHUB_PAGES) {
     initDropzone();
     initGlobalDragAndDrop();
@@ -208,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ปิด Modal ด้วยปุ่ม ESC
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeTxModal();
+    if (e.key === 'Escape') { closeTxModal(); closeGoalChartModal(); }
   });
 });
 
@@ -363,14 +364,14 @@ function setupDataset() {
       qty: Number(item.qty) || 0,
       pic: (item.pic || 'ไม่ระบุ').trim(),
       strategy: officialMethod,
-      remark: remarkNote
+      remark: item.remark || remarkNote
     };
   });
 
   filterTransactions();
 
   // ป้องกันกรณีมีข้อมูลตกค้างของเดือนที่ยังไม่มีรายการสั่งซื้อจริงในปี 2026 (เช่น ก.ย. เป็นต้นไป)
-  if (State.data.monthlySummary) {
+  if (State.data.monthlySummary && !State.data.workbookSource) {
     const active2026Months = new Set(
       State.transactions.filter(t => t.year === '2026').map(t => t.month)
     );
@@ -498,6 +499,21 @@ function getActiveScopeTransactions() {
 
 // คำนวณสรุปรายเดือนแบบไดนามิกสำหรับปีที่เลือก
 function getMonthlyAggregatedData() {
+  if (State.data?.workbookSource) {
+    return MONTH_ORDER.map(month => {
+      const periods = State.data.workbookSource.periods.filter(p => p.month === month && (State.activeYear === 'ALL' || p.year === State.activeYear));
+      const pv = periods.reduce((s,p) => s + (p.purchase ?? 0), 0);
+      const cr = periods.reduce((s,p) => s + p.savings, 0);
+      const count = periods.reduce((s,p) => s + p.count, 0);
+      const missingPurchase = periods.some(p => p.count > 0 && p.purchase === null);
+      const pct = pv > 0 && !missingPurchase ? cr / pv : null;
+      return { month, pv, cr, count, missingPurchase, target: missingPurchase ? null : pv * State.targetRate,
+        pct, isPassed: pct !== null && pct >= State.targetRate,
+        creditSaving: periods.reduce((s,p) => s + p.creditSaving, 0),
+        creditPOVal: periods.reduce((s,p) => s + p.creditPOVal, 0),
+        creditDiffDays: periods.length === 1 ? periods[0].creditDiffDays : null };
+    });
+  }
   const isAllYears = State.activeYear === 'ALL';
   const yearTxs = isAllYears 
     ? State.transactions 
@@ -572,6 +588,7 @@ function renderAllViews() {
   renderPICLeaderboard();
   filterTransactions();
   renderTransactionTable();
+  renderWorkbookSources();
 }
 
 // รูปแบบตัวเลขและสกุลเงิน
@@ -595,6 +612,7 @@ function animateValue(id, endValue, isCurrency = true, decimals = 2) {
   if (!el) return;
   
   const rawPrev = el.dataset.currVal;
+  cancelAnimationFrame(el._valueAnimationFrame);
   const start = rawPrev !== undefined ? (parseFloat(rawPrev) || 0) : 0;
   el.dataset.currVal = String(endValue);
 
@@ -612,14 +630,14 @@ function animateValue(id, endValue, isCurrency = true, decimals = 2) {
     else el.textContent = (currentVal * 100).toFixed(decimals) + '%';
 
     if (progress < 1) {
-      requestAnimationFrame(update);
+      el._valueAnimationFrame = requestAnimationFrame(update);
     } else {
       if (isCurrency) el.textContent = formatCurrency(endValue, decimals);
       else el.textContent = (endValue * 100).toFixed(decimals) + '%';
     }
   }
 
-  requestAnimationFrame(update);
+  el._valueAnimationFrame = requestAnimationFrame(update);
 }
 
 // -------------------------------------------------------------
@@ -644,7 +662,7 @@ function renderExecutiveDashboard() {
   let totalSavings = scopedMonthly.reduce((sum, r) => sum + r.cr, 0);
 
   // Fallback คำนวณจากรายการสั่งซื้อกรณีที่ไม่มีข้อมูล summary
-  if (totalPurchase === 0 && scopedTxs.length > 0) {
+  if (!State.data.workbookSource && totalPurchase === 0 && scopedTxs.length > 0) {
     scopedTxs.forEach(t => {
       totalPurchase += t.totalPrice;
       totalSavings += t.totalSaving;
@@ -652,16 +670,19 @@ function renderExecutiveDashboard() {
   }
 
   let totalCreditSavings = scopedMonthly.reduce((sum, m) => sum + (m.creditSaving || 0), 0);
-  if (totalCreditSavings === 0 && (State.activeYear === '2026' || State.activeYear === 'ALL') && !isMonthFiltered && !isQuarterFiltered) {
-    totalCreditSavings = 85669.64;
-  }
 
   const savingRate = totalPurchase > 0 ? (totalSavings / totalPurchase) : 0;
   const targetRate = State.targetRate || 0.03;
   const isMet = savingRate >= targetRate;
 
   animateValue('kpi-total-savings', totalSavings, true, 2);
-  animateValue('kpi-total-purchase', totalPurchase, true, 2);
+  const purchaseUnavailable = State.data.workbookSource && (scopedMonthly.some(r => r.missingPurchase) || totalPurchase <= 0);
+  if (purchaseUnavailable) {
+    const purchaseEl = document.getElementById('kpi-total-purchase');
+    cancelAnimationFrame(purchaseEl._valueAnimationFrame);
+    purchaseEl.textContent = '—';
+  }
+  else animateValue('kpi-total-purchase', totalPurchase, true, 2);
 
   document.getElementById('kpi-savings-mb').textContent = `${(totalSavings / 1000000).toFixed(2)} ล้านบาท`;
   document.getElementById('kpi-savings-rate').textContent = `+${(savingRate * 100).toFixed(2)}% ประหยัดได้`;
@@ -700,6 +721,17 @@ function renderExecutiveDashboard() {
   }
 
   document.getElementById('kpi-credit-savings').textContent = formatCurrency(totalCreditSavings);
+
+  if (State.data.workbookSource && (scopedMonthly.some(r => r.missingPurchase) || totalPurchase <= 0)) {
+    document.getElementById('kpi-savings-rate').textContent = 'รอมูลค่าซื้อรวม';
+    document.getElementById('kpi-purchase-mb').textContent = 'มูลค่าซื้อรวมยังไม่ครบทุกเดือนที่มี PO';
+    targetPctDisplay.textContent = '—';
+    targetRateDisplay.textContent = 'ไม่พร้อมคำนวณ';
+    targetBadge.textContent = 'ข้อมูลไม่ครบ';
+    targetBadge.className = 'kpi-badge neutral';
+    targetDiff.textContent = 'ยังไม่มีมูลค่าซื้อรวมครบช่วงที่เลือก';
+    gaugeFill?.setAttribute('stroke-dasharray', '0, 100');
+  }
 
   renderQuickInsight();
   renderMonthlyTrendChart();
@@ -747,7 +779,7 @@ function renderQuickInsight(isManualTrigger = false) {
   let totalPurchase = scopedMonthly.reduce((sum, r) => sum + (r.pv || 0), 0);
   let totalSavings = scopedMonthly.reduce((sum, r) => sum + (r.cr || 0), 0);
 
-  if (totalPurchase === 0 && scopedTxs.length > 0) {
+  if (!State.data.workbookSource && totalPurchase === 0 && scopedTxs.length > 0) {
     scopedTxs.forEach(t => {
       totalPurchase += (t.totalPrice || 0);
       totalSavings += (t.totalSaving || 0);
@@ -765,6 +797,11 @@ function renderQuickInsight(isManualTrigger = false) {
   if (isMonthFiltered) scopeText += ` • เดือน ${THAI_MONTHS[activeMonth] || activeMonth}`;
   else if (isQuarterFiltered) scopeText += ` • ไตรมาส ${activeQuarter}`;
   if (scopeEl) scopeEl.textContent = scopeText;
+  if (State.data.workbookSource && scopedMonthly.some(r => r.missingPurchase)) {
+    summaryEl.textContent = `ผลลดต้นทุนจาก PO ที่สมบูรณ์ ${formatCurrency(totalSavings)} · รอมูลค่าซื้อรวมครบช่วงที่เลือกเพื่อคำนวณ KPI · ตรวจสอบข้อแตกต่างได้ที่แหล่งข้อมูลและส่งออก`;
+    if (chipsEl) chipsEl.replaceChildren();
+    return;
+  }
 
   // วิเคราะห์ผลงานรายไตรมาส
   const qStats = {
@@ -950,7 +987,8 @@ function renderMonthlyTrendChart() {
   const totalTarget = monthlyAgg.reduce((sum, row) => sum + row.target, 0);
   const variance = totalActual - totalTarget;
   const hasData = monthlyAgg.some(row => row.pv > 0 || row.cr !== 0);
-  const statusText = !hasData ? 'ยังไม่มีข้อมูล' : variance >= 0 ? 'สูงกว่าเป้า' : 'ต่ำกว่าเป้า';
+  const missingPurchase = monthlyAgg.some(row => row.missingPurchase);
+  const statusText = !hasData ? 'ยังไม่มีข้อมูล' : missingPurchase ? 'รอมูลค่าซื้อรวม' : variance >= 0 ? 'สูงกว่าเป้า' : 'ต่ำกว่าเป้า';
   const actualEl = document.getElementById('chart-actual-total');
   const targetEl = document.getElementById('chart-target-total');
   const varianceEl = document.getElementById('chart-variance-total');
@@ -958,14 +996,14 @@ function renderMonthlyTrendChart() {
   const summaryEl = document.getElementById('monthly-chart-summary');
 
   if (actualEl) actualEl.textContent = formatCurrency(totalActual);
-  if (targetEl) targetEl.textContent = formatCurrency(totalTarget);
-  if (varianceEl) varianceEl.textContent = `${variance >= 0 ? '+' : '-'}${formatCurrency(Math.abs(variance))}`;
+  if (targetEl) targetEl.textContent = missingPurchase || !hasData ? '—' : formatCurrency(totalTarget);
+  if (varianceEl) varianceEl.textContent = missingPurchase || !hasData ? '—' : `${variance >= 0 ? '+' : '-'}${formatCurrency(Math.abs(variance))}`;
   if (statusEl) {
     statusEl.textContent = statusText;
-    statusEl.className = `chart-status-badge ${hasData ? (variance >= 0 ? 'is-positive' : 'is-negative') : ''}`;
+    statusEl.className = `chart-status-badge ${hasData && !missingPurchase ? (variance >= 0 ? 'is-positive' : 'is-negative') : ''}`;
   }
   if (summaryEl) {
-    summaryEl.textContent = hasData
+    summaryEl.textContent = missingPurchase ? `ลดต้นทุนจริง ${formatCurrency(totalActual)} ยังไม่มีมูลค่าซื้อรวมครบช่วงที่เลือก จึงไม่คำนวณเป้าหมายและส่วนต่าง` : hasData
       ? `ยอดลดต้นทุนจริง ${formatCurrency(totalActual)} เป้าหมาย ${formatCurrency(totalTarget)} ${statusText} ${formatCurrency(Math.abs(variance))} จากมูลค่าสั่งซื้อ ${formatCurrency(totalPurchase)}`
       : 'ยังไม่มีข้อมูลผลลดต้นทุนสำหรับช่วงเวลาที่เลือก';
   }
@@ -989,7 +1027,7 @@ function renderMonthlyTrendChart() {
       if (r.pv === 0 && r.cr === 0) return null;
       return r.cr / 1000000;
     });
-    const targetSavingsMB = monthlyAgg.map(r => (r.pv > 0 ? r.target / 1000000 : null));
+    const targetSavingsMB = monthlyAgg.map(r => (r.pv > 0 && !r.missingPurchase ? r.target / 1000000 : null));
 
     const validSavings = costReductionMB.filter(v => v !== null);
     const minSaving = validSavings.length > 0 ? Math.min(...validSavings) : 0;
@@ -1021,7 +1059,8 @@ function renderMonthlyTrendChart() {
             pointStyle: 'rectRot',
             pointBackgroundColor: targetColor,
             spanGaps: false,
-            order: 2
+            // Chart.js draws lower orders last, above the bars.
+            order: 0
           }
         ]
       },
@@ -1064,7 +1103,7 @@ function renderMonthlyTrendChart() {
               afterBody: (items) => {
                 const idx = items[0]?.dataIndex;
                 const row = monthlyAgg[idx];
-                if (!row || row.pv <= 0) return [];
+                if (!row || row.pv <= 0 || row.missingPurchase) return ['ยังไม่มีมูลค่าซื้อรวม'];
                 const gap = row.cr - row.target;
                 return [
                   `มูลค่าสั่งซื้อ: ${formatCurrency(row.pv)}`,
@@ -1102,6 +1141,7 @@ function renderMonthlyTrendChart() {
   } else {
     let cumActual = 0;
     let cumTarget = 0;
+    let incompleteTarget = false;
     let lastActiveIndex = -1;
 
     monthlyAgg.forEach((r, idx) => {
@@ -1114,6 +1154,7 @@ function renderMonthlyTrendChart() {
     const targetCumulative = [];
 
     monthlyAgg.forEach((r, idx) => {
+      incompleteTarget ||= Boolean(r.missingPurchase);
       if (idx <= lastActiveIndex) {
         cumActual += r.cr;
         actualCumulative.push(cumActual / 1000000);
@@ -1123,7 +1164,7 @@ function renderMonthlyTrendChart() {
 
       if (r.pv > 0 || idx <= lastActiveIndex) {
         cumTarget += r.target;
-        targetCumulative.push(cumTarget / 1000000);
+        targetCumulative.push(incompleteTarget ? null : cumTarget / 1000000);
       } else {
         targetCumulative.push(null);
       }
@@ -1147,7 +1188,8 @@ function renderMonthlyTrendChart() {
             pointBackgroundColor: actualColor,
             pointBorderColor: isDark ? '#0f172a' : '#ffffff',
             pointBorderWidth: 1.5,
-            spanGaps: false
+            spanGaps: false,
+            order: 1
           },
           {
             label: `เป้าหมายสะสม ${(State.targetRate * 100).toFixed(1)}%`,
@@ -1159,7 +1201,8 @@ function renderMonthlyTrendChart() {
             pointStyle: 'rectRot',
             pointBackgroundColor: targetColor,
             fill: false,
-            spanGaps: false
+            spanGaps: false,
+            order: 0
           }
         ]
       },
@@ -1412,19 +1455,19 @@ function renderMonthlyKPITracking() {
 
     const varianceTHB = row.cr - row.target;
     const hasData = row.pv > 0 || row.cr !== 0 || row.count > 0;
-    const statusBadge = hasData
+    const statusBadge = row.missingPurchase ? '<span class="kpi-badge neutral">รอมูลค่าซื้อรวม</span>' : hasData
       ? `<span class="kpi-badge ${row.isPassed ? 'success' : 'danger'}">${row.isPassed ? '✓ ได้ตามเป้า' : '✕ ต่ำกว่าเป้า'}</span>`
       : `<span class="kpi-badge neutral">-</span>`;
 
     return `
       <tr>
         <td><strong>${THAI_MONTHS[row.month] || row.month}</strong></td>
-        <td>${formatCurrency(row.pv)}</td>
+        <td>${row.missingPurchase ? 'ไม่ครบ / รอข้อมูล' : formatCurrency(row.pv)}</td>
         <td class="highlight-col">${formatCurrency(row.cr)}</td>
-        <td>${formatCurrency(row.target)}</td>
-        <td><strong>${hasData ? (row.pct * 100).toFixed(2) + '%' : '-'}</strong></td>
+        <td>${row.missingPurchase ? '—' : formatCurrency(row.target)}</td>
+        <td><strong>${hasData && !row.missingPurchase ? (row.pct * 100).toFixed(2) + '%' : '-'}</strong></td>
         <td style="color: ${hasData ? (varianceTHB >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)') : 'var(--text-muted)'}">
-          ${hasData ? (varianceTHB >= 0 ? '+' + formatCurrency(varianceTHB) : 'ขาด ' + formatCurrency(Math.abs(varianceTHB))) : '-'}
+          ${hasData && !row.missingPurchase ? (varianceTHB >= 0 ? '+' + formatCurrency(varianceTHB) : 'ขาด ' + formatCurrency(Math.abs(varianceTHB))) : '-'}
         </td>
         <td>${statusBadge}</td>
         <td>${formatCurrency(row.creditSaving)}</td>
@@ -1433,20 +1476,21 @@ function renderMonthlyKPITracking() {
   }).join('');
 
   const totalActualPct = totalPV > 0 ? (totalCR / totalPV) : 0;
+  const incomplete = !totalPV || monthlyAgg.some(row => row.missingPurchase);
   const isTotalPassed = totalActualPct >= State.targetRate;
   tbody.innerHTML += `
     <tr style="background: var(--bg-glass); font-weight: 700;">
       <td>${monthlyAgg.length === MONTH_ORDER.length ? 'รวมทั้งปี' : 'รวมช่วงที่เลือก'} (GRAND TOTAL)</td>
-      <td>${formatCurrency(totalPV)}</td>
+      <td>${incomplete ? 'ไม่ครบ / รอข้อมูล' : formatCurrency(totalPV)}</td>
       <td class="highlight-col">${formatCurrency(totalCR)}</td>
-      <td>${formatCurrency(totalTarget)}</td>
-      <td style="color: var(--accent-primary);">${(totalActualPct * 100).toFixed(2)}%</td>
+      <td>${incomplete ? '—' : formatCurrency(totalTarget)}</td>
+      <td style="color: var(--accent-primary);">${incomplete ? '—' : (totalActualPct * 100).toFixed(2) + '%'}</td>
       <td style="color: ${totalCR - totalTarget >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">
-        ${totalCR - totalTarget >= 0 ? '+' + formatCurrency(totalCR - totalTarget) : 'ขาด ' + formatCurrency(Math.abs(totalCR - totalTarget))}
+        ${incomplete ? 'รอมูลค่าซื้อรวม' : totalCR - totalTarget >= 0 ? '+' + formatCurrency(totalCR - totalTarget) : 'ขาด ' + formatCurrency(Math.abs(totalCR - totalTarget))}
       </td>
       <td>
-        <span class="kpi-badge ${isTotalPassed ? 'success' : 'danger'}">
-          ${isTotalPassed ? '✓ ได้ตามเป้า' : '✕ ต่ำกว่าเป้า'}
+        <span class="kpi-badge ${incomplete ? 'neutral' : isTotalPassed ? 'success' : 'danger'}">
+          ${incomplete ? 'ข้อมูลไม่ครบ' : isTotalPassed ? '✓ ได้ตามเป้า' : '✕ ต่ำกว่าเป้า'}
         </span>
       </td>
       <td>${formatCurrency(totalCreditSaving)}</td>
@@ -1468,8 +1512,8 @@ function renderMonthlyKPITracking() {
       creditTbody.innerHTML = creditRows.map(m => `
         <tr>
           <td><strong>${THAI_MONTHS[m.month] || m.month}</strong></td>
-          <td><span class="tier-tag tier-mid">+30 วัน</span></td>
-          <td>${formatCurrency(m.pv)}</td>
+          <td><span class="tier-tag tier-mid">${m.creditDiffDays ?? '—'} วัน</span></td>
+          <td>${formatCurrency(m.creditPOVal ?? m.pv)}</td>
           <td class="highlight-col">${formatCurrency(m.creditSaving)}</td>
         </tr>
       `).join('');
@@ -1494,6 +1538,14 @@ function renderMultiYearChart() {
     ? THAI_MONTHS[State.activeMonth]
     : (State.activeQuarter && State.activeQuarter !== 'ALL' ? `ไตรมาส ${State.activeQuarter}` : 'ทั้งปี');
   const multiYearData = years.map(yr => {
+    if (State.data.workbookSource) {
+      const periods = State.data.workbookSource.periods.filter(p => p.year === yr && selectedMonths.includes(p.month));
+      const purchase = periods.reduce((s,p) => s + (p.purchase ?? 0), 0);
+      const saving = periods.reduce((s,p) => s + p.savings, 0);
+      const incomplete = periods.some(p => p.count > 0 && p.purchase === null);
+      return { year: yr, purchase, saving, target: incomplete || !purchase ? null : purchase * State.targetRate,
+        savingMB: saving / 1000000, pct: incomplete || !purchase ? 'ไม่พร้อมคำนวณ' : (saving / purchase * 100).toFixed(2) };
+    }
     const txs = State.transactions.filter(t => t.year === yr && selectedMonths.includes(t.month));
     let saving = txs.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
 
@@ -1528,12 +1580,12 @@ function renderMultiYearChart() {
 
   const labels = multiYearData.map(y => formatYearBE(y.year));
   const savingsValues = multiYearData.map(y => y.savingMB);
-  const targetValues = multiYearData.map(y => y.target / 1000000);
+  const targetValues = multiYearData.map(y => y.target === null ? null : y.target / 1000000);
   const subtitleEl = document.getElementById('multi-year-chart-subtitle');
   const summaryEl = document.getElementById('multi-year-chart-summary');
   if (subtitleEl) subtitleEl.textContent = `ผลลดต้นทุนจริงเทียบเป้าหมาย ${(State.targetRate * 100).toFixed(1)}% · ${scopeLabel}`;
   if (summaryEl) {
-    summaryEl.textContent = `เปรียบเทียบ ${scopeLabel}: ${multiYearData.map(item => `${formatYearBE(item.year)} ลดต้นทุน ${formatCurrency(item.saving)} เป้าหมาย ${formatCurrency(item.target)}`).join(', ')}`;
+    summaryEl.textContent = `เปรียบเทียบ ${scopeLabel}: ${multiYearData.map(item => `${formatYearBE(item.year)} ลดต้นทุน ${formatCurrency(item.saving)} เป้าหมาย ${item.target === null ? 'รอมูลค่าซื้อรวม' : formatCurrency(item.target)}`).join(', ')}`;
   }
 
   if (State.charts.multiYear) {
@@ -1576,8 +1628,8 @@ function renderMultiYearChart() {
           pointHoverRadius: 7,
           pointBackgroundColor: targetColor,
           pointBorderColor: isDark ? '#0f172a' : '#ffffff',
-          pointBorderWidth: 1.5,
-          order: 2
+            pointBorderWidth: 1.5,
+          order: 0
         }
       ]
     },
@@ -2122,10 +2174,10 @@ function initSimulators() {
   const monthsInput = document.getElementById('sim-months-year');
 
   const calcKaizen = () => {
-    const wage = Math.max(0, Number(wageInput?.value) || 117);
-    const min = Math.max(0, Number(minInput?.value) || 10);
-    const jobs = Math.max(0, Number(jobsInput?.value) || 16);
-    const months = Math.max(0, Number(monthsInput?.value) || 1);
+    const wage = Math.max(0, Number(wageInput?.value) || 0);
+    const min = Math.max(0, Number(minInput?.value) || 0);
+    const jobs = Math.max(0, Number(jobsInput?.value) || 0);
+    const months = Math.max(0, Number(monthsInput?.value) || 0);
 
     const result = (min / 60) * jobs * wage * months;
     const resEl = document.getElementById('sim-kaizen-result');
@@ -2809,7 +2861,9 @@ function exportFilteredTransactions() {
 
 window.exportMonthlyKPIToCSV = function() {
   const headers = ["เดือน", "มูลค่าสั่งซื้อ (บาท)", "มูลค่าต่อรองได้ (บาท)", `เป้าหมาย ${(State.targetRate * 100).toFixed(1)}% (บาท)`, "% ส่วนลดจริง", "ผลต่างเทียบเป้าหมาย (บาท)", "สถานะ KPI", "ผลประหยัดเพิ่มเครดิต (บาท)"];
-  const monthlyAgg = getMonthlyAggregatedData();
+  const selectedMonths = State.activeMonth !== 'ALL' ? [State.activeMonth] : (QUARTER_MONTHS[State.activeQuarter] || MONTH_ORDER);
+  const monthlyAgg = getMonthlyAggregatedData().filter(m => selectedMonths.includes(m.month));
+  const incomplete = monthlyAgg.some(m => m.missingPurchase);
   let totalPV = 0, totalCR = 0, totalTarget = 0, totalCredit = 0;
 
   const rows = monthlyAgg.map(m => {
@@ -2820,12 +2874,12 @@ window.exportMonthlyKPIToCSV = function() {
     const diff = m.cr - m.target;
     return [
       `"${THAI_MONTHS[m.month] || m.month}"`,
-      m.pv.toFixed(2),
+      m.missingPurchase ? 'ไม่ครบ' : m.pv.toFixed(2),
       m.cr.toFixed(2),
-      m.target.toFixed(2),
-      (m.pct * 100).toFixed(2) + '%',
-      diff.toFixed(2),
-      `"${m.isPassed ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}"`,
+      m.pct === null ? 'ไม่พร้อมคำนวณ' : m.target.toFixed(2),
+      m.pct === null ? 'ไม่พร้อมคำนวณ' : (m.pct * 100).toFixed(2) + '%',
+      m.pct === null ? 'ไม่พร้อมคำนวณ' : diff.toFixed(2),
+      `"${m.pct === null ? 'ข้อมูลไม่ครบ' : m.isPassed ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}"`,
       m.creditSaving.toFixed(2)
     ];
   });
@@ -2833,13 +2887,13 @@ window.exportMonthlyKPIToCSV = function() {
   const totalPct = totalPV > 0 ? (totalCR / totalPV) : 0;
   const totalDiff = totalCR - totalTarget;
   rows.push([
-    '"รวมทั้งปี (GRAND TOTAL)"',
-    totalPV.toFixed(2),
+    '"รวมช่วงที่เลือก"',
+    incomplete ? 'ไม่ครบ' : totalPV.toFixed(2),
     totalCR.toFixed(2),
-    totalTarget.toFixed(2),
-    (totalPct * 100).toFixed(2) + '%',
-    totalDiff.toFixed(2),
-    `"${totalPct >= State.targetRate ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}"`,
+    incomplete || !totalPV ? 'ไม่พร้อมคำนวณ' : totalTarget.toFixed(2),
+    incomplete || !totalPV ? 'ไม่พร้อมคำนวณ' : (totalPct * 100).toFixed(2) + '%',
+    incomplete || !totalPV ? 'ไม่พร้อมคำนวณ' : totalDiff.toFixed(2),
+    `"${incomplete || !totalPV ? 'ข้อมูลไม่ครบ' : totalPct >= State.targetRate ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}"`,
     totalCredit.toFixed(2)
   ]);
 
@@ -2934,7 +2988,61 @@ function updateChartsTheme() {
 const GSHEET_STORAGE_KEY = 'qtc_gsheet_config';
 
 // ฟังก์ชันสร้างชุดข้อมูล (Complete Dataset) จากรายการสั่งซื้อทั้งหมด
-function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
+function renderWorkbookSources() {
+  const source = State.data?.workbookSource;
+  const status = document.getElementById('workbook-dashboard-status');
+  if (status) {
+    status.hidden = !source;
+    status.textContent = source ? `ข้อมูลจาก ${source.tabs.length} แท็บ · พบ ${source.issues.length} ข้อแตกต่าง / ข้อผิดพลาดต้นทาง · ดูรายละเอียดที่หน้าข้อมูลต้นทาง · ข้อมูล ณ ${new Date(State.data.generatedAt).toLocaleString('th-TH')}` : '';
+  }
+  const panel = document.getElementById('workbook-sources');
+  if (!panel) return;
+  panel.hidden = !source;
+  if (!source) return;
+  document.getElementById('workbook-source-status').textContent = `อ่าน ${source.tabs.length} แท็บ · ${source.importedRows.toLocaleString()} รายการ · ไม่นับซ้ำข้ามแท็บ ${source.tabs.reduce((s,t) => s + (t.duplicates || 0), 0)} แถว · ไม่สมบูรณ์ ${source.excluded.length} แถว · ${State.data.generatedAt}`;
+  const issues = document.getElementById('workbook-source-issues');
+  const reviewItems = [...source.issues, ...source.excluded.map(row => `${row.sheet} แถว ${row.row}: ${row.poNo || 'ไม่มี PO'} — ข้อมูลไม่สมบูรณ์ ไม่นำมารวม KPI`)];
+  issues.replaceChildren(...reviewItems.map(issue => { const li = document.createElement('li'); li.textContent = issue; return li; }));
+  const select = document.getElementById('workbook-tab-select');
+  const selected = select.value;
+  select.replaceChildren(...source.tabs.map(t => { const option = document.createElement('option'); option.value = t.name; option.textContent = `${t.name} (${t.rows.length} แถว)`; return option; }));
+  if (source.tabs.some(t => t.name === selected)) select.value = selected;
+  renderWorkbookTab();
+}
+
+window.renderWorkbookTab = function(more = false) {
+  const select = document.getElementById('workbook-tab-select');
+  const tab = State.data?.workbookSource?.tabs.find(t => t.name === select?.value);
+  if (!tab) return;
+  const table = document.getElementById('workbook-tab-table');
+  const limit = more ? Number(table.dataset.limit || 100) + 100 : 100;
+  table.dataset.limit = String(limit);
+  document.getElementById('workbook-tab-role').textContent = `${tab.role} · ช่วง ${tab.range} · ข้อมูลต้นทาง รวมแถวที่ยังไม่สมบูรณ์`;
+  const head = document.createElement('thead');
+  const header = document.createElement('tr');
+  const width = Math.max(0, ...tab.rows.map(r => r.values.length));
+  for (let i = -1; i < width; i++) { const th = document.createElement('th'); th.textContent = i < 0 ? 'แถว' : XLSX.utils.encode_col(tab.startColumn + i); header.append(th); }
+  head.append(header);
+  const body = document.createElement('tbody');
+  for (const row of tab.rows.slice(0, limit)) {
+    const tr = document.createElement('tr');
+    for (const value of [row.row, ...row.values]) { const td = document.createElement('td'); td.textContent = String(value); tr.append(td); }
+    body.append(tr);
+  }
+  table.replaceChildren(head, body);
+  document.getElementById('workbook-more-rows').hidden = limit >= tab.rows.length;
+};
+
+function applyWorkbookSimulatorInputs() {
+  const params = State.data?.workbookSource?.kaizenParams;
+  if (!params) return;
+  for (const [key, id] of Object.entries({ hourlyWage:'sim-hourly-wage', savedMinutesPerJob:'sim-minutes-saved', jobsPerMonth:'sim-jobs-month', monthsPerYear:'sim-months-year' })) {
+    const input = document.getElementById(id);
+    if (input && params[key] !== undefined) { input.value = params[key]; input.dispatchEvent(new Event('input')); }
+  }
+}
+
+function buildDatasetFromTransactions(allTransactions, customConfig = {}, source = null) {
   const recentTransactions = [];
   const historicalTransactions = [];
 
@@ -3014,7 +3122,7 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
     return item;
   });
 
-  return {
+  const dataset = {
     title: "QTC ENERGY PCL - KPI Discount Supplier & Procurement Cost Reduction",
     generatedAt: new Date().toISOString(),
     config: {
@@ -3028,6 +3136,32 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}) {
     historicalTransactions,
     recentTransactions
   };
+  if (source) {
+    const { transactions, ...metadata } = source;
+    dataset.workbookSource = { ...metadata, importedRows: transactions.length };
+    dataset.config.kaizenParams = source.kaizenParams;
+    dataset.purchaseHistory = source.periods.map(p => ({year:p.year, month:p.month, purchaseValue:p.purchase, source:p.purchaseSource}));
+    dataset.monthlySummary = monthlySummary.map(row => {
+      const p = source.periods.find(p => p.year === '2026' && p.month === row.month);
+      if (!p) return row;
+      const target = p.purchase === null ? null : p.purchase * State.targetRate;
+      return { ...row, pv2026:p.purchase, cr2026:p.savings, target2026:target,
+        pct2026:p.purchase > 0 ? p.savings / p.purchase * 100 : null,
+        status2026:p.purchase === null ? 'ไม่พร้อมคำนวณ' : p.savings >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย',
+        savingVsTarget:target === null ? null : p.savings - target,
+        pctDiffTarget:target > 0 ? (p.savings - target) / target : null,
+        creditDiffDays:p.creditDiffDays, creditPOVal:p.creditPOVal, creditSaving:p.creditSaving };
+    });
+    dataset.yearlySummary = [...new Set(source.periods.map(p => p.year))].map(year => {
+      const periods = source.periods.filter(p => p.year === year);
+      const knownPurchaseValue = periods.reduce((s,p) => s + (p.purchase ?? 0), 0);
+      const incomplete = periods.some(p => p.count > 0 && p.purchase === null);
+      const costSaving = periods.reduce((s,p) => s + p.savings, 0);
+      return { year, purchaseValue:incomplete ? null : knownPurchaseValue, knownPurchaseValue, costSaving,
+        percentSaving:!incomplete && knownPurchaseValue > 0 ? costSaving / knownPurchaseValue : null };
+    });
+  }
+  return dataset;
 }
 
 async function initGoogleSheetSync() {
@@ -3092,6 +3226,9 @@ async function initGoogleSheetSync() {
   if (config.autoSync && config.url && config.url.trim() !== '') {
     console.log('🔄 Auto-syncing live from configured Google Sheet URL...');
     await syncGoogleSheetNow(false);
+    State.sheetSyncTimer ??= setInterval(() => {
+      if (!document.hidden && (IS_GITHUB_PAGES || document.getElementById('gsheet-auto-sync')?.checked)) syncGoogleSheetNow(false);
+    }, 5 * 60 * 1000);
   }
 }
 
@@ -3371,6 +3508,7 @@ window.importPastedCSVData = async function() {
 };
 
 window.syncGoogleSheetNow = async function(showAlert = true) {
+  if (State.sheetSyncInProgress) return;
   const urlInput = IS_GITHUB_PAGES
     ? LIVE_SHEET_URL
     : (document.getElementById('gsheet-url-input')?.value.trim() || '');
@@ -3378,7 +3516,7 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
     ? true
     : (document.getElementById('gsheet-auto-sync')?.checked ?? true);
 
-  const { sheetId, gid } = extractGoogleSheetInfo(urlInput);
+  const { sheetId } = extractGoogleSheetInfo(urlInput);
   if (!sheetId) {
     if (showAlert) {
       alert('กรุณากรอก Google Sheet URL หรือ Sheet ID ในหน้า "จัดการไฟล์ข้อมูล Excel"\n(ระบบได้ยกเลิกลิงก์เริ่มต้นแล้ว กรุณาวางลิงก์ Google Sheet ของคุณ)');
@@ -3393,21 +3531,22 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
   const topbarLabel = document.getElementById('topbar-sync-label');
   const badge = document.getElementById('gsheet-status-badge');
 
+  State.sheetSyncInProgress = true;
   if (syncBtn) syncBtn.disabled = true;
   if (topbarLabel) topbarLabel.textContent = 'กำลังซิงค์...';
   if (badge) badge.textContent = '⏳ กำลังดึงข้อมูลจาก Google Sheets...';
 
   try {
-    let allTransactions = [];
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? '&gid=' + gid : ''}`;
+    const workbookUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`;
     
-    const res = await fetch(gvizUrl);
+    const res = await fetch(workbookUrl, { cache: 'no-store', signal: AbortSignal.timeout(60000) });
     if (!res.ok) {
       throw new Error(`ไม่สามารถเชื่อมต่อ Google Sheet ได้ (Status: ${res.status}).\nกรุณาตรวจสอบว่า Google Sheet ตั้งค่าแชร์เป็น "ทุกคนที่มีลิงก์มีสิทธิ์ดู (Anyone with the link can view)"`);
     }
 
-    const text = await res.text();
-    allTransactions = parseGvizTextToRows(text);
+    const workbook = XLSX.read(await res.arrayBuffer(), { type: 'array' });
+    const source = QTCWorkbook.read(workbook, XLSX);
+    const allTransactions = source.transactions;
 
     if (allTransactions.length === 0) {
       throw new Error('ไม่พบข้อมูลรายการสั่งซื้อใน Google Sheet');
@@ -3417,13 +3556,15 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
     const completeDataset = buildDatasetFromTransactions(allTransactions, {
       gsheetUrl: urlInput,
       gsheetAutoSync: autoSync
-    });
+    }, source);
+    State.dataQuality = { importedRows: allTransactions.length, skippedRows: source.excluded.length };
 
     // อัปเดตข้อมูลในระบบแบบ Real-time
     window.KPI_DATA = completeDataset;
     State.data = completeDataset;
     setupDataset();
     renderAllViews();
+    applyWorkbookSimulatorInputs();
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
@@ -3465,7 +3606,7 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
 
     const quality = document.getElementById('gsheet-quality-summary');
     if (quality && State.dataQuality) {
-      quality.textContent = `นำเข้า ${State.dataQuality.importedRows.toLocaleString()} รายการ • ไม่รวมแถวว่าง/ไม่สมบูรณ์ ${State.dataQuality.skippedRows.toLocaleString()} แถว`;
+      quality.textContent = `อ่านครบ ${source.tabs.length} แท็บ • ${State.dataQuality.importedRows.toLocaleString()} รายการ • ไม่สมบูรณ์ ${State.dataQuality.skippedRows.toLocaleString()} แถว • ข้อสังเกต ${source.issues.length} รายการ`;
       quality.style.color = State.dataQuality.skippedRows > 0 ? 'var(--accent-amber)' : 'var(--accent-emerald)';
     }
 
@@ -3487,7 +3628,7 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
     console.error('Google Sheet Sync Error:', err);
     const quality = document.getElementById('gsheet-quality-summary');
     if (quality) {
-      quality.textContent = 'โหลดชีตสดไม่สำเร็จ — กำลังแสดงข้อมูลสำรองจากไฟล์ล่าสุด';
+      quality.textContent = `โหลดชีตสดไม่สำเร็จ — แสดงข้อมูลล่าสุดที่โหลดสำเร็จ ณ ${State.data?.generatedAt || 'ไม่ทราบเวลา'}`;
       quality.style.color = 'var(--accent-rose)';
     }
     if (badge) {
@@ -3501,6 +3642,7 @@ window.syncGoogleSheetNow = async function(showAlert = true) {
       alert(`❌ ไม่สามารถซิงค์ข้อมูลได้:\n${err.message}\n\nคำแนะนำ:\n1. ตรวจสอบว่าเปิดแชร์ Google Sheet เป็น "ทุกคนที่มีลิงก์มีสิทธิ์ดู (Anyone with link can view)"\n2. ตรวจสอบว่าลิงก์ URL ถูกต้องหรือไม่`);
     }
   } finally {
+    State.sheetSyncInProgress = false;
     if (syncBtn) syncBtn.disabled = false;
   }
 };
@@ -3689,6 +3831,11 @@ function calculateGoalProgress(goal) {
   }
 
   let current = 0;
+  let available = true;
+  const periods = State.data?.workbookSource?.periods.filter(p =>
+    (!goal.year || goal.year === 'ALL' || p.year === goal.year) &&
+    (!goal.month || goal.month === 'ALL' || p.month === goal.month) &&
+    (goal.month && goal.month !== 'ALL' || !goal.quarter || goal.quarter === 'ALL' || (QUARTER_MONTHS[goal.quarter] || []).includes(p.month)));
   let target = parseFloat(goal.targetValue) || 0;
   let formattedCurrent = '';
   let formattedTarget = '';
@@ -3699,16 +3846,16 @@ function calculateGoalProgress(goal) {
     formattedCurrent = formatCurrency(current, 0);
     formattedTarget = formatCurrency(target, 0);
   } else if (goal.category === 'savings_rate') {
-    const totalPV = txs.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
+    const useOfficial = periods && (!goal.pic || goal.pic === 'ALL');
+    const totalPV = useOfficial ? periods.reduce((s,p) => s + (p.purchase ?? 0), 0) : txs.reduce((sum, t) => sum + (t.totalPrice || 0), 0);
+    available = !useOfficial || (totalPV > 0 && !periods.some(p => p.count > 0 && p.purchase === null));
     const totalCR = txs.reduce((sum, t) => sum + (t.totalSaving || 0), 0);
     current = totalPV > 0 ? (totalCR / totalPV) * 100 : 0;
     formattedCurrent = current.toFixed(2) + '%';
     formattedTarget = target.toFixed(2) + '%';
   } else if (goal.category === 'credit_thb') {
     current = txs.filter(t => (t.strategy || '').includes('เครดิต')).reduce((sum, t) => sum + (t.totalSaving || 0), 0);
-    if (current === 0 && (goal.year === '2026' || goal.year === 'ALL')) {
-      current = 85669.64;
-    }
+    if (periods && (!goal.pic || goal.pic === 'ALL')) current = periods.reduce((s,p) => s + p.creditSaving, 0);
     formattedCurrent = formatCurrency(current, 0);
     formattedTarget = formatCurrency(target, 0);
   } else if (goal.category === 'pic_savings') {
@@ -3721,6 +3868,7 @@ function calculateGoalProgress(goal) {
     formattedTarget = formatCurrency(target, 0);
   }
 
+  if (!available) current = 0;
   const pct = target > 0 ? (current / target) * 100 : 0;
   const clampedPct = Math.min(Math.max(pct, 0), 100);
   const isAchieved = pct >= 100;
@@ -3765,6 +3913,7 @@ function calculateGoalProgress(goal) {
   }
 
   return {
+    available,
     current,
     target,
     pct,
@@ -3773,12 +3922,12 @@ function calculateGoalProgress(goal) {
     remainingVal,
     surplusVal,
     remainingPct,
-    formattedCurrent,
+    formattedCurrent: available ? formattedCurrent : 'รอมูลค่าซื้อรวม',
     formattedTarget,
-    formattedGapText,
-    formattedGapTag,
-    status,
-    statusText,
+    formattedGapText: available ? formattedGapText : 'รอมูลค่าซื้อรวม',
+    formattedGapTag: available ? formattedGapTag : 'ข้อมูลไม่ครบ',
+    status: available ? status : 'on-track',
+    statusText: available ? statusText : 'ข้อมูลไม่ครบสำหรับ KPI',
     unit,
     txCount: txs.length
   };
@@ -3806,16 +3955,18 @@ function renderGoalsWidget() {
   let goalsList = State.goals || [];
   let achievedCount = 0;
   let totalPctSum = 0;
+  let unavailableCount = 0;
 
   // คำนวณสถิติภาพรวม
   goalsList.forEach(g => {
     const prog = calculateGoalProgress(g);
+    if (!prog.available) { unavailableCount++; return; }
     if (prog.status === 'achieved') achievedCount++;
     totalPctSum += prog.clampedPct;
   });
 
   const totalGoals = goalsList.length;
-  const overallAvgPct = totalGoals > 0 ? (totalPctSum / totalGoals).toFixed(1) : '0.0';
+  const overallAvgPct = totalGoals > unavailableCount ? (totalPctSum / (totalGoals - unavailableCount)).toFixed(1) : '0.0';
   const pendingCount = totalGoals - achievedCount;
 
   // อัปเดตแบนเนอร์สรุป
@@ -3830,7 +3981,7 @@ function renderGoalsWidget() {
   if (statPending) statPending.textContent = pendingCount;
   if (overallFill) overallFill.style.width = `${overallAvgPct}%`;
   if (dashSub) {
-    dashSub.textContent = `บรรลุเป้าหมายแล้ว ${achievedCount}/${totalGoals} รายการ (เฉลี่ยความสำเร็จรวม ${overallAvgPct}%)`;
+    dashSub.textContent = `บรรลุเป้าหมายแล้ว ${achievedCount}/${totalGoals} รายการ (เฉลี่ยเฉพาะข้อมูลพร้อม ${overallAvgPct}%)${unavailableCount ? ` · รอข้อมูล ${unavailableCount} รายการ` : ''}`;
   }
 
   // สร้าง HTML สำหรับการ์ดเป้าหมาย พร้อมตัวเลขและเปอร์เซ็นต์ที่ต้องทำเพิ่ม + คลิกดูกราฟวงกลม
@@ -3863,7 +4014,7 @@ function renderGoalsWidget() {
           <div class="goal-metric-cell">
             <span class="goal-metric-lbl">ทำได้แล้ว</span>
             <span class="goal-metric-val" style="color: var(--accent-emerald);">${prog.formattedCurrent}</span>
-            <span class="goal-metric-gap-tag surplus">${prog.pct.toFixed(1)}%</span>
+            <span class="goal-metric-gap-tag surplus">${prog.available ? prog.pct.toFixed(1) + '%' : '—'}</span>
           </div>
           <div class="goal-metric-cell">
             <span class="goal-metric-lbl">เป้าหมาย</span>
@@ -3880,7 +4031,7 @@ function renderGoalsWidget() {
         <div class="goal-progress-wrap">
           <div class="goal-progress-labels">
             <span style="color: var(--text-secondary);">ความคืบหน้า: <b style="color: var(--text-primary);">${prog.formattedCurrent}</b> / ${prog.formattedTarget}</span>
-            <span style="color: ${prog.status === 'achieved' ? 'var(--accent-emerald)' : 'var(--accent-primary)'}; font-family: var(--font-display); font-weight: 700;">${prog.pct.toFixed(1)}%</span>
+            <span style="color: ${prog.status === 'achieved' ? 'var(--accent-emerald)' : 'var(--accent-primary)'}; font-family: var(--font-display); font-weight: 700;">${prog.available ? prog.pct.toFixed(1) + '%' : '—'}</span>
           </div>
           <div class="goal-progress-bar">
             <div class="goal-progress-fill" style="width: ${prog.clampedPct}%;"></div>
@@ -3977,7 +4128,7 @@ window.openGoalChartModal = function(goalId) {
   document.getElementById('gdetail-sub-target').textContent = `ขอบเขต: ${formatYearBE(goal.year)} (${scopeMonthText})`;
 
   document.getElementById('gdetail-val-current').textContent = prog.formattedCurrent;
-  document.getElementById('gdetail-sub-current').textContent = `อัตราความสำเร็จ ${prog.pct.toFixed(1)}%`;
+  document.getElementById('gdetail-sub-current').textContent = prog.available ? `อัตราความสำเร็จ ${prog.pct.toFixed(1)}%` : 'ข้อมูลไม่ครบสำหรับ KPI';
 
   const lblGap = document.getElementById('gdetail-lbl-gap');
   const valGap = document.getElementById('gdetail-val-gap');
@@ -3995,14 +4146,19 @@ window.openGoalChartModal = function(goalId) {
     subGap.textContent = `ขาดอีก ${prog.remainingPct.toFixed(1)}% เพื่อถึงเป้า 100%`;
   }
 
-  document.getElementById('gdetail-val-pct').textContent = prog.pct.toFixed(1) + '%';
+  if (!prog.available) {
+    document.getElementById('goal-chart-legend').replaceChildren();
+    valGap.textContent = '—';
+    subGap.textContent = 'รอมูลค่าซื้อรวม';
+  }
+  document.getElementById('gdetail-val-pct').textContent = prog.available ? prog.pct.toFixed(1) + '%' : '—';
   document.getElementById('gdetail-sub-deadline').textContent = `ครบกำหนด: ${goal.deadline || '31 ธ.ค. 2026'}`;
 
   // Progress Bar
   document.getElementById('gdetail-progress-ratio').textContent = `${prog.formattedCurrent} / ${prog.formattedTarget}`;
   const pill = document.getElementById('gdetail-progress-pill');
   pill.className = `kpi-badge ${prog.isAchieved ? 'success' : (prog.pct < 50 ? 'danger' : 'warning')}`;
-  pill.textContent = `${prog.pct.toFixed(1)}% สำเร็จ`;
+  pill.textContent = prog.available ? `${prog.pct.toFixed(1)}% สำเร็จ` : 'ข้อมูลไม่ครบ';
 
   document.getElementById('gdetail-progress-bar-fill').style.width = `${prog.clampedPct}%`;
 
@@ -4066,6 +4222,12 @@ function renderGoalPieChart() {
 
   const prog = calculateGoalProgress(goal);
   const isDark = State.theme === 'dark';
+  canvas.hidden = !prog.available;
+  if (!prog.available) {
+    document.getElementById('gdetail-breakdown-title').textContent = 'รอมูลค่าซื้อรวมสำหรับ KPI';
+    document.getElementById('gdetail-breakdown-tbody').innerHTML = '<tr><td colspan="3">ข้อมูลไม่ครบ — ยังไม่คำนวณอัตราความสำเร็จ</td></tr>';
+    return;
+  }
   const textColor = isDark ? '#f1f5f9' : '#0f172a';
 
   let labels = [];
