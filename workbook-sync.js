@@ -91,16 +91,18 @@ globalThis.QTCWorkbook = (() => {
       const summary = sourceMonthly.find(r => r.year === year && r.month === month);
       const purchases = purchaseRows.filter(r => String(r.values[0]) === year && r.values[1] === month && number(r.values[2]) !== null);
       const sourcePurchase = purchases.length ? purchases.reduce((s,r) => s + r.values[2], 0) : null;
-      const purchase = sourcePurchase > 0 ? sourcePurchase : summary?.purchase > 0 ? summary.purchase : null;
+      const officialPurchase = sourcePurchase > 0 ? sourcePurchase : summary?.purchase > 0 ? summary.purchase : null;
       const savings = txs.reduce((s,t) => s + t.totalSaving, 0);
       const poPurchase = txs.reduce((s,t) => s + t.totalPrice, 0);
-      const purchaseSource = sourcePurchase > 0 ? 'มูลค่าซื้อ' : summary?.purchase > 0 ? 'สรุป-รายเดือน' : 'ไม่พบมูลค่าซื้อรวม';
+      const partial = officialPurchase === null && txs.length > 0;
+      const purchase = officialPurchase ?? (poPurchase > 0 ? poPurchase : null);
+      const purchaseSource = sourcePurchase > 0 ? 'มูลค่าซื้อ' : summary?.purchase > 0 ? 'สรุป-รายเดือน' : partial ? 'ยอด PO ที่บันทึกแล้ว (ชั่วคราว ไม่ใช่มูลค่าซื้อรวม)' : 'ยังไม่มีข้อมูล';
       if (summary?.savings !== null && summary?.savings !== undefined && Math.abs(summary.savings - savings) > 0.02)
         issues.push(`${year} ${month}: สรุป-รายเดือน savings ${summary.savings.toFixed(2)} / รายการสมบูรณ์ ${savings.toFixed(2)}`);
       if (sourcePurchase > 0 && summary?.purchase > 0 && Math.abs(sourcePurchase - summary.purchase) > 0.02)
         issues.push(`${year} ${month}: มูลค่าซื้อ ${sourcePurchase.toFixed(2)} / สรุป-รายเดือน ${summary.purchase.toFixed(2)}`);
-      if (txs.length && purchase === null) issues.push(`${year} ${month}: มีรายการส่วนลด แต่ยังไม่มีมูลค่าซื้อรวมสำหรับ KPI`);
-      periods.push({ year, month, purchase, poPurchase, savings, count: txs.length, purchaseSource,
+      if (partial) issues.push(`${year} ${month}: KPI ชั่วคราว ใช้ยอด PO ที่บันทึกแล้ว รอมูลค่าซื้อรวม`);
+      periods.push({ year, month, purchase, officialPurchase, partial, poPurchase, savings, count: txs.length, purchaseSource,
         creditSaving: summary?.creditSaving ?? 0, creditPOVal: summary?.creditPOVal ?? 0, creditDiffDays: summary?.creditDiffDays ?? 0 });
     }
     for (const source of tabs) {

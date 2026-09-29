@@ -507,7 +507,7 @@ function getMonthlyAggregatedData() {
       const count = periods.reduce((s,p) => s + p.count, 0);
       const missingPurchase = periods.some(p => p.count > 0 && p.purchase === null);
       const pct = pv > 0 && !missingPurchase ? cr / pv : null;
-      return { month, pv, cr, count, missingPurchase, target: missingPurchase ? null : pv * State.targetRate,
+      return { month, pv, cr, count, missingPurchase, partial: periods.some(p => p.partial), target: missingPurchase ? null : pv * State.targetRate,
         pct, isPassed: pct !== null && pct >= State.targetRate,
         creditSaving: periods.reduce((s,p) => s + p.creditSaving, 0),
         creditPOVal: periods.reduce((s,p) => s + p.creditPOVal, 0),
@@ -721,6 +721,12 @@ function renderExecutiveDashboard() {
   }
 
   document.getElementById('kpi-credit-savings').textContent = formatCurrency(totalCreditSavings);
+  if (scopedMonthly.some(r => r.partial)) {
+    document.getElementById('kpi-purchase-mb').textContent = 'รวมยอดที่มีแล้ว · บางเดือนใช้ยอด PO แทนมูลค่าซื้อรวม';
+    document.getElementById('kpi-savings-rate').textContent += ' · ชั่วคราว';
+    targetBadge.textContent += ' · ชั่วคราว';
+    targetDiff.textContent += ' · คำนวณจากข้อมูลที่มีแล้ว';
+  }
 
   if (State.data.workbookSource && (scopedMonthly.some(r => r.missingPurchase) || totalPurchase <= 0)) {
     document.getElementById('kpi-savings-rate').textContent = 'รอมูลค่าซื้อรวม';
@@ -948,7 +954,7 @@ function renderQuickInsight(isManualTrigger = false) {
     </span>
   `);
 
-  summaryEl.innerHTML = insightText;
+  summaryEl.innerHTML = insightText + (scopedMonthly.some(r => r.partial) ? ' · KPI ชั่วคราว: บางเดือนใช้ยอด PO ที่บันทึกแล้วแทนมูลค่าซื้อรวม' : '');
   if (chipsEl) chipsEl.innerHTML = chips.join('');
 }
 
@@ -988,7 +994,8 @@ function renderMonthlyTrendChart() {
   const variance = totalActual - totalTarget;
   const hasData = monthlyAgg.some(row => row.pv > 0 || row.cr !== 0);
   const missingPurchase = monthlyAgg.some(row => row.missingPurchase);
-  const statusText = !hasData ? 'ยังไม่มีข้อมูล' : missingPurchase ? 'รอมูลค่าซื้อรวม' : variance >= 0 ? 'สูงกว่าเป้า' : 'ต่ำกว่าเป้า';
+  const partial = monthlyAgg.some(row => row.partial);
+  const statusText = !hasData ? 'ยังไม่มีข้อมูล' : missingPurchase ? 'รอมูลค่าซื้อรวม' : `${variance >= 0 ? 'สูงกว่าเป้า' : 'ต่ำกว่าเป้า'}${partial ? ' · ชั่วคราว (ยอด PO)' : ''}`;
   const actualEl = document.getElementById('chart-actual-total');
   const targetEl = document.getElementById('chart-target-total');
   const varianceEl = document.getElementById('chart-variance-total');
@@ -1461,7 +1468,7 @@ function renderMonthlyKPITracking() {
 
     return `
       <tr>
-        <td><strong>${THAI_MONTHS[row.month] || row.month}</strong></td>
+        <td><strong>${THAI_MONTHS[row.month] || row.month}</strong>${row.partial ? '<br><small>ชั่วคราว · ยอด PO ที่บันทึกแล้ว</small>' : ''}</td>
         <td>${row.missingPurchase ? 'ไม่ครบ / รอข้อมูล' : formatCurrency(row.pv)}</td>
         <td class="highlight-col">${formatCurrency(row.cr)}</td>
         <td>${row.missingPurchase ? '—' : formatCurrency(row.target)}</td>
@@ -1480,7 +1487,7 @@ function renderMonthlyKPITracking() {
   const isTotalPassed = totalActualPct >= State.targetRate;
   tbody.innerHTML += `
     <tr style="background: var(--bg-glass); font-weight: 700;">
-      <td>${monthlyAgg.length === MONTH_ORDER.length ? 'รวมทั้งปี' : 'รวมช่วงที่เลือก'} (GRAND TOTAL)</td>
+      <td>${monthlyAgg.length === MONTH_ORDER.length ? 'รวมทั้งปี' : 'รวมช่วงที่เลือก'} (GRAND TOTAL)${monthlyAgg.some(r => r.partial) ? ' · ชั่วคราว' : ''}</td>
       <td>${incomplete ? 'ไม่ครบ / รอข้อมูล' : formatCurrency(totalPV)}</td>
       <td class="highlight-col">${formatCurrency(totalCR)}</td>
       <td>${incomplete ? '—' : formatCurrency(totalTarget)}</td>
@@ -1544,7 +1551,7 @@ function renderMultiYearChart() {
       const saving = periods.reduce((s,p) => s + p.savings, 0);
       const incomplete = periods.some(p => p.count > 0 && p.purchase === null);
       return { year: yr, purchase, saving, target: incomplete || !purchase ? null : purchase * State.targetRate,
-        savingMB: saving / 1000000, pct: incomplete || !purchase ? 'ไม่พร้อมคำนวณ' : (saving / purchase * 100).toFixed(2) };
+        savingMB: saving / 1000000, pct: incomplete || !purchase ? 'ไม่พร้อมคำนวณ' : (saving / purchase * 100).toFixed(2), partial: periods.some(p => p.partial) };
     }
     const txs = State.transactions.filter(t => t.year === yr && selectedMonths.includes(t.month));
     let saving = txs.reduce((sum, t) => sum + (Number(t.totalSaving) || 0), 0);
@@ -1578,7 +1585,7 @@ function renderMultiYearChart() {
     };
   });
 
-  const labels = multiYearData.map(y => formatYearBE(y.year));
+  const labels = multiYearData.map(y => `${formatYearBE(y.year)}${y.partial ? ' (ชั่วคราว)' : ''}`);
   const savingsValues = multiYearData.map(y => y.savingMB);
   const targetValues = multiYearData.map(y => y.target === null ? null : y.target / 1000000);
   const subtitleEl = document.getElementById('multi-year-chart-subtitle');
@@ -1628,7 +1635,7 @@ function renderMultiYearChart() {
           pointHoverRadius: 7,
           pointBackgroundColor: targetColor,
           pointBorderColor: isDark ? '#0f172a' : '#ffffff',
-            pointBorderWidth: 1.5,
+          pointBorderWidth: 1.5,
           order: 0
         }
       ]
@@ -2873,7 +2880,7 @@ window.exportMonthlyKPIToCSV = function() {
     totalCredit += m.creditSaving;
     const diff = m.cr - m.target;
     return [
-      `"${THAI_MONTHS[m.month] || m.month}"`,
+      `"${THAI_MONTHS[m.month] || m.month}${m.partial ? ' (ชั่วคราว: ยอด PO ที่บันทึกแล้ว)' : ''}"`,
       m.missingPurchase ? 'ไม่ครบ' : m.pv.toFixed(2),
       m.cr.toFixed(2),
       m.pct === null ? 'ไม่พร้อมคำนวณ' : m.target.toFixed(2),
@@ -2887,7 +2894,7 @@ window.exportMonthlyKPIToCSV = function() {
   const totalPct = totalPV > 0 ? (totalCR / totalPV) : 0;
   const totalDiff = totalCR - totalTarget;
   rows.push([
-    '"รวมช่วงที่เลือก"',
+    `"รวมช่วงที่เลือก${monthlyAgg.some(m => m.partial) ? ' (ชั่วคราว)' : ''}"`,
     incomplete ? 'ไม่ครบ' : totalPV.toFixed(2),
     totalCR.toFixed(2),
     incomplete || !totalPV ? 'ไม่พร้อมคำนวณ' : totalTarget.toFixed(2),
@@ -2993,7 +3000,7 @@ function renderWorkbookSources() {
   const status = document.getElementById('workbook-dashboard-status');
   if (status) {
     status.hidden = !source;
-    status.textContent = source ? `ข้อมูลจาก ${source.tabs.length} แท็บ · พบ ${source.issues.length} ข้อแตกต่าง / ข้อผิดพลาดต้นทาง · ดูรายละเอียดที่หน้าข้อมูลต้นทาง · ข้อมูล ณ ${new Date(State.data.generatedAt).toLocaleString('th-TH')}` : '';
+    status.textContent = source ? `ข้อมูลจาก ${source.tabs.length} แท็บ · ${source.periods.some(p => p.partial) ? 'แสดงข้อมูลล่าสุดที่มีแล้ว: เดือนที่ขาดยอดซื้อรวมใช้ยอด PO ชั่วคราว ไม่ใช่ KPI สรุปปิดเดือน · ' : ''}พบ ${source.issues.length} ข้อแตกต่าง / ข้อผิดพลาดต้นทาง · ข้อมูล ณ ${new Date(State.data.generatedAt).toLocaleString('th-TH')}` : '';
   }
   const panel = document.getElementById('workbook-sources');
   if (!panel) return;
@@ -3145,7 +3152,7 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}, source
       const p = source.periods.find(p => p.year === '2026' && p.month === row.month);
       if (!p) return row;
       const target = p.purchase === null ? null : p.purchase * State.targetRate;
-      return { ...row, pv2026:p.purchase, cr2026:p.savings, target2026:target,
+      return { ...row, partial:p.partial, purchaseSource:p.purchaseSource, pv2026:p.purchase, cr2026:p.savings, target2026:target,
         pct2026:p.purchase > 0 ? p.savings / p.purchase * 100 : null,
         status2026:p.purchase === null ? 'ไม่พร้อมคำนวณ' : p.savings >= target ? 'ได้ตามเป้าหมาย' : 'ไม่ได้ตามเป้าหมาย',
         savingVsTarget:target === null ? null : p.savings - target,
@@ -3157,7 +3164,7 @@ function buildDatasetFromTransactions(allTransactions, customConfig = {}, source
       const knownPurchaseValue = periods.reduce((s,p) => s + (p.purchase ?? 0), 0);
       const incomplete = periods.some(p => p.count > 0 && p.purchase === null);
       const costSaving = periods.reduce((s,p) => s + p.savings, 0);
-      return { year, purchaseValue:incomplete ? null : knownPurchaseValue, knownPurchaseValue, costSaving,
+      return { year, purchaseValue:incomplete ? null : knownPurchaseValue, knownPurchaseValue, costSaving, partial:periods.some(p => p.partial),
         percentSaving:!incomplete && knownPurchaseValue > 0 ? costSaving / knownPurchaseValue : null };
     });
   }
@@ -3257,120 +3264,6 @@ function extractGoogleSheetInfo(input) {
   return { sheetId, gid };
 }
 
-// ตัวแปลงผลลัพธ์ Google Visualization API เป็น Array of Objects
-function parseGvizTextToRows(gvizText) {
-  const jsonStart = gvizText.indexOf('{');
-  const jsonEnd = gvizText.lastIndexOf('}');
-  if (jsonStart === -1 || jsonEnd === -1) throw new Error("รูปแบบข้อมูล Google Sheet ไม่ถูกต้อง");
-  
-  const rawJson = gvizText.substring(jsonStart, jsonEnd + 1);
-  const data = JSON.parse(rawJson);
-  
-  if (data.status === 'error') {
-    throw new Error(data.errors?.[0]?.detailed_message || data.errors?.[0]?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลชีต');
-  }
-
-  if (!data.table || !data.table.rows) return [];
-
-  const parseNum = (val) => {
-    if (val === null || val === undefined || val === '') return 0;
-    if (typeof val === 'number') return isNaN(val) ? 0 : val;
-    const cleaned = String(val).replace(/,/g, '').replace(/฿/g, '').trim();
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : num;
-  };
-
-  const rows = [];
-  let skippedRows = 0;
-  data.table.rows.forEach((r, rowIdx) => {
-    if (!r || !r.c) return;
-    
-    const getCellVal = (cIdx) => {
-      if (cIdx < r.c.length && r.c[cIdx]) {
-        if (r.c[cIdx].v !== null && r.c[cIdx].v !== undefined) return r.c[cIdx].v;
-        if (r.c[cIdx].f !== null && r.c[cIdx].f !== undefined) return r.c[cIdx].f;
-      }
-      return '';
-    };
-
-    // ดึงค่าตามลำดับคอลัมน์มาตรฐานของชีต (Col A ถึง P)
-    const rawYr = getCellVal(0);
-    const yr = rawYr ? String(parseInt(rawYr) || rawYr).trim() : '2026';
-    
-    let mo = String(getCellVal(1) || 'JAN').toUpperCase().trim();
-    if (mo.length > 3) mo = mo.slice(0, 3);
-
-    const po = String(getCellVal(2) || '').trim();
-    const supp = String(getCellVal(3) || '').trim();
-    if (!po && !supp) {
-      skippedRows++;
-      return;
-    }
-    const desc = String(getCellVal(4) || '').trim();
-    
-    const qty = parseNum(getCellVal(5));
-    const unit = String(getCellVal(6) || 'EA').trim();
-    const minPrice = parseNum(getCellVal(7));
-    
-    let totalPrice = parseNum(getCellVal(8));
-    if (totalPrice === 0 && qty > 0 && minPrice > 0) totalPrice = qty * minPrice;
-
-    // Rows without a purchase value are unfinished source rows and must not affect KPI totals.
-    if (totalPrice <= 0) {
-      skippedRows++;
-      return;
-    }
-
-    const rawNegPrice = getCellVal(9);
-    const negPrice = rawNegPrice === '' ? minPrice : parseNum(rawNegPrice);
-    const rawUnitDiff = getCellVal(10);
-    const unitDiff = rawUnitDiff === '' ? (minPrice - negPrice) : parseNum(rawUnitDiff);
-    const rawTotalSaving = getCellVal(11);
-    const totalSaving = rawTotalSaving === '' ? (unitDiff * qty) : parseNum(rawTotalSaving);
-
-    const rawPctDisc = getCellVal(12);
-    let pctDisc = parseNum(rawPctDisc);
-    if (rawPctDisc === '' && totalPrice > 0) {
-      pctDisc = totalSaving / totalPrice;
-    }
-    if (pctDisc > 1) pctDisc = pctDisc / 100;
-
-    const method = String(getCellVal(13) || 'ไม่ระบุ').trim();
-    const pic = String(getCellVal(14) || 'ไม่ระบุ').trim();
-    const remark = String(getCellVal(15) || '').trim();
-
-    rows.push({
-      id: `gs-${rowIdx + 1}`,
-      globalId: `gs-${rowIdx + 1}`,
-      year: yr,
-      month: mo,
-      poNo: po,
-      supplier: supp,
-      description: desc,
-      qty: qty,
-      unit: unit,
-      minUnitPrice: minPrice,
-      totalPrice: totalPrice,
-      negotiatedUnitPrice: negPrice,
-      unitDifference: unitDiff,
-      totalSaving: totalSaving,
-      percentDiscount: pctDisc,
-      strategy: method,
-      method: method,
-      pic: pic,
-      remark: remark
-    });
-  });
-
-  if (skippedRows > 0) console.warn(`Skipped ${skippedRows} incomplete Google Sheet rows.`);
-  State.dataQuality = {
-    sourceRows: data.table.rows.length,
-    importedRows: rows.length,
-    skippedRows
-  };
-
-  return rows;
-}
 
 // ตัวแปลงข้อความ CSV เป็นรายการสั่งซื้อ
 function parseCSVTextToTransactions(csvText) {
@@ -3922,7 +3815,7 @@ function calculateGoalProgress(goal) {
     remainingVal,
     surplusVal,
     remainingPct,
-    formattedCurrent: available ? formattedCurrent : 'รอมูลค่าซื้อรวม',
+    formattedCurrent: available ? formattedCurrent + (goal.category === 'savings_rate' && periods?.some(p => p.partial) ? ' (ชั่วคราว)' : '') : 'รอมูลค่าซื้อรวม',
     formattedTarget,
     formattedGapText: available ? formattedGapText : 'รอมูลค่าซื้อรวม',
     formattedGapTag: available ? formattedGapTag : 'ข้อมูลไม่ครบ',
