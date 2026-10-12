@@ -592,6 +592,7 @@ function getMonthlyAggregatedData() {
 // เรนเดอร์หน้าจอทั้งหมด
 function renderAllViews() {
   renderExecutiveDashboard();
+  renderExecHero();
   renderGoalsWidget();
   renderMonthlyKPITracking();
   renderSuppliersView();
@@ -599,6 +600,54 @@ function renderAllViews() {
   filterTransactions();
   renderTransactionTable();
   renderWorkbookSources();
+}
+
+// แถบสรุปผู้บริหาร (Executive Hero) + Sparkline บนการ์ด KPI จากข้อมูลรายเดือนจริง
+function sparkMarkup(values, w, h, cls) {
+  if (values.length < 2) return '';
+  const max = Math.max(...values), min = Math.min(0, ...values), span = (max - min) || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 8)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
+  const [lx, ly] = pts[pts.length - 1];
+  return `<path class="${cls}-area" d="${line}L${w},${h}L0,${h}Z"/><path class="${cls}-line" d="${line}"/><circle class="${cls}-dot" cx="${lx}" cy="${ly}" r="3"/>`;
+}
+
+function renderExecHero() {
+  const all = getMonthlyAggregatedData();
+  const months = all.filter(m => m.pv > 0 || m.cr > 0);
+  const scoped = State.activeMonth !== 'ALL' ? all.filter(m => m.month === State.activeMonth) : all;
+  const actual = scoped.reduce((s, m) => s + (m.cr || 0), 0);
+  const missing = scoped.some(m => m.missingPurchase || m.target === null);
+  const target = scoped.reduce((s, m) => s + (m.target || 0), 0);
+  const attain = !missing && target > 0 ? actual / target : null;
+
+  const yearText = State.activeYear === 'ALL' ? 'ทุกปี' : `ปี ${Number(State.activeYear) + 543}`;
+  document.getElementById('hero-period').textContent = State.activeMonth === 'ALL'
+    ? `${yearText} · ภาพรวมทั้งปี` : `${THAI_MONTHS[State.activeMonth]} ${yearText}`;
+  const stamp = State.data?.generatedAt ? new Date(State.data.generatedAt) : null;
+  document.getElementById('hero-live-label').textContent = stamp && !isNaN(stamp)
+    ? `อัปเดต ${stamp.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}` : 'ข้อมูลล่าสุด';
+
+  const badge = document.getElementById('hero-attain-badge');
+  document.getElementById('hero-attain-pct').textContent = attain === null ? '—' : (attain * 100).toFixed(0);
+  document.getElementById('hero-attain-fill').style.width = `${attain === null ? 0 : Math.min(attain / 1.5, 1) * 100}%`;
+  document.getElementById('hero-attain-bar').setAttribute('aria-label', attain === null
+    ? 'ยังคำนวณความสำเร็จเทียบเป้าหมายไม่ได้' : `ทำได้ ${(attain * 100).toFixed(0)}% ของเป้าหมาย`);
+  badge.textContent = attain === null ? 'รอข้อมูลมูลค่าซื้อ' : attain >= 1 ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย';
+  badge.dataset.state = attain === null ? 'neutral' : attain >= 1 ? 'up' : 'down';
+  document.getElementById('hero-actual').textContent = formatCurrency(actual, 0);
+  document.getElementById('hero-target').textContent = missing ? '—' : formatCurrency(target, 0);
+  document.getElementById('hero-spark').innerHTML = sparkMarkup(months.map(m => m.cr || 0), 300, 64, 'hspark');
+
+  const series = {
+    cr: months.map(m => m.cr || 0),
+    pv: months.map(m => m.pv || 0),
+    pct: months.map(m => (m.pct || 0) * 100),
+    credit: months.map(m => m.creditSaving || 0)
+  };
+  document.querySelectorAll('#view-dashboard .kpi-spark').forEach(svg => {
+    svg.innerHTML = sparkMarkup(series[svg.dataset.spark] || [], 200, 40, 'kspark');
+  });
 }
 
 // รูปแบบตัวเลขและสกุลเงิน

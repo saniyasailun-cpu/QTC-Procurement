@@ -216,13 +216,42 @@
 
         <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
         <section class="view-section active" id="view-dashboard">
-          <div class="presentation-heading">
-            <div><span class="presentation-eyebrow">QTC ENERGY / PROCUREMENT PERFORMANCE</span>
-              <h1>ทุกการต่อรอง สร้างคุณค่า</h1>
-              <p>ผลลดต้นทุนจัดซื้อ · ข้อมูลจริงจาก Google Sheets</p>
+          <section class="exec-hero" aria-label="สรุปผลสำหรับผู้บริหาร">
+            <div class="exec-hero-main">
+              <span class="exec-eyebrow">QTC ENERGY / PROCUREMENT PERFORMANCE</span>
+              <h1>ทุกการต่อรอง <span>สร้างคุณค่า</span></h1>
+              <p>ผลลดต้นทุนจัดซื้อและส่วนลดซัพพลายเออร์ · ข้อมูลจริงจาก Google Sheets</p>
+              <div class="exec-hero-meta">
+                <span class="live-chip"><span class="live-dot" aria-hidden="true"></span><span id="hero-live-label">ข้อมูลล่าสุด</span></span>
+                <span class="hero-period" id="hero-period">ปี 2569 · ภาพรวมทั้งปี</span>
+              </div>
+              <div class="exec-hero-actions">
+                <button class="btn-hero-primary" onclick="startMotionPresentation()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  เล่นพรีเซนเทชัน
+                </button>
+                <button class="btn-hero-ghost" onclick="switchView('kpi-tracking')">ดูรายงานฉบับเต็ม <span aria-hidden="true">↗</span></button>
+              </div>
             </div>
-            <button class="btn-action btn-action-secondary" onclick="switchView('kpi-tracking')">ดูรายงานฉบับเต็ม <span aria-hidden="true">↗</span></button>
-          </div>
+            <div class="exec-hero-attain">
+              <div class="attain-head">
+                <span>ความสำเร็จเทียบเป้าหมายลดต้นทุน</span>
+                <span class="attain-badge" id="hero-attain-badge">—</span>
+              </div>
+              <div class="attain-value"><span id="hero-attain-pct">—</span><small>%</small></div>
+              <div class="attain-bar" role="img" id="hero-attain-bar" aria-label="ความสำเร็จเทียบเป้าหมาย">
+                <span id="hero-attain-fill"></span><i class="attain-target" aria-hidden="true"></i>
+              </div>
+              <div class="attain-foot">
+                <span>ทำได้ <b id="hero-actual">฿0</b></span>
+                <span>เป้าหมาย <b id="hero-target">฿0</b></span>
+              </div>
+              <div class="hero-spark-wrap">
+                <span class="hero-spark-label">ผลลดต้นทุนรายเดือน</span>
+                <svg class="hero-spark" id="hero-spark" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"></svg>
+              </div>
+            </div>
+          </section>
           <details class="source-disclosure"><summary>แหล่งข้อมูลและสถานะการตรวจสอบ</summary><p id="workbook-dashboard-status" role="status" hidden></p></details>
 
           <!-- 4 การ์ดสรุป KPI ด้านบน -->
@@ -236,6 +265,7 @@
                 </div>
               </div>
               <div class="kpi-card-value" id="kpi-total-savings" style="color: var(--accent-emerald);">฿0.00</div>
+              <svg class="kpi-spark" data-spark="cr" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="kpi-card-footer">
                 <span class="kpi-card-subtext" id="kpi-savings-mb">0.00 ล้านบาท</span>
                 <span class="kpi-badge success" id="kpi-savings-rate">+0.0% ประหยัดได้</span>
@@ -251,6 +281,7 @@
                 </div>
               </div>
               <div class="kpi-card-value" id="kpi-total-purchase">฿0.00</div>
+              <svg class="kpi-spark" data-spark="pv" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="kpi-card-footer">
                 <span class="kpi-card-subtext" id="kpi-purchase-mb">0.00 ล้านบาท</span>
                 <span class="kpi-badge warning" id="kpi-po-count">0 รายการ</span>
@@ -270,6 +301,7 @@
                 </div>
               </div>
               <div class="kpi-card-value" id="kpi-target-rate-display">0.00%</div>
+              <svg class="kpi-spark" data-spark="pct" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="kpi-card-footer">
                 <span class="kpi-card-subtext" id="kpi-target-diff">เป้าหมาย 3.00%</span>
                 <span class="kpi-badge success" id="kpi-target-badge">ได้ตามเป้าหมาย</span>
@@ -285,6 +317,7 @@
                 </div>
               </div>
               <div class="kpi-card-value" id="kpi-credit-savings">—</div>
+              <svg class="kpi-spark" data-spark="credit" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="kpi-card-footer">
                 <span class="kpi-card-subtext">ดอกเบี้ย 4.25% ต่อปี</span>
                 <span class="kpi-badge success">ลดต้นทุนทางบัญชี</span>
