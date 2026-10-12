@@ -4026,3 +4026,67 @@ body { background: var(--bg-base); color: var(--text-primary); font-size: 14px; 
 @media (max-width: 900px) {
   .goals-mini-stat { border-left: 0; border-top: 1px solid var(--border-card); padding: 12px 0 0; }
 }
+
+/* Light theme: sidebar and hero follow the theme (navy chrome is dark-mode only) */
+[data-theme="light"] .sidebar { background: var(--bg-surface); border-right: 1px solid var(--border-card); color: var(--text-secondary); }
+[data-theme="light"] .sidebar .sidebar-header,
+[data-theme="light"] .sidebar .sidebar-footer { border-color: var(--border-card); }
+[data-theme="light"] .sidebar .logo-box { border: 1px solid var(--border-card); }
+[data-theme="light"] .sidebar .company-name,
+[data-theme="light"] .sidebar .user-name { color: var(--text-primary); }
+[data-theme="light"] .sidebar .system-tag,
+[data-theme="light"] .sidebar .user-role,
+[data-theme="light"] .sidebar .nav-label { color: var(--text-muted); }
+[data-theme="light"] .sidebar .nav-item { color: var(--text-secondary); }
+[data-theme="light"] .sidebar .nav-item svg { color: var(--text-muted); }
+[data-theme="light"] .sidebar .nav-item:hover { background: var(--bg-glass); color: var(--text-primary); }
+[data-theme="light"] .sidebar .nav-item:hover svg { color: var(--text-secondary); }
+[data-theme="light"] .sidebar .nav-item.active { background: var(--accent-primary-bg); color: var(--text-primary); }
+[data-theme="light"] .sidebar .nav-item.active svg { color: #f15a29; }
+
+[data-theme="light"] .exec-hero {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  border-top: 3px solid #f15a29;
+  color: var(--text-secondary);
+}
+[data-theme="light"] .exec-hero-meta,
+[data-theme="light"] .hero-stamp { color: var(--text-muted); }
+[data-theme="light"] .hero-period { color: var(--text-primary); }
+[data-theme="light"] .hero-sep { background: var(--border-card); }
+[data-theme="light"] .exec-hero h1 { color: var(--text-secondary); }
+[data-theme="light"] .exec-hero h1 strong { color: var(--text-primary); }
+[data-theme="light"] .hero-sub { color: var(--text-secondary); }
+[data-theme="light"] .hero-facts { border-top-color: var(--border-card); }
+[data-theme="light"] .hero-facts > div { border-right-color: var(--border-card); }
+[data-theme="light"] .hero-facts dt { color: var(--text-muted); }
+[data-theme="light"] .hero-facts dd { color: var(--text-primary); }
+[data-theme="light"] .hero-facts dd[data-tone="up"] { color: var(--accent-emerald); }
+[data-theme="light"] .hero-facts dd[data-tone="down"] { color: var(--accent-rose); }
+[data-theme="light"] .btn-hero-link { color: var(--text-secondary); }
+[data-theme="light"] .btn-hero-link:hover { color: var(--text-primary); }
+[data-theme="light"] .btn-hero-primary:focus-visible,
+[data-theme="light"] .btn-hero-link:focus-visible { outline-color: var(--border-focus); }
+
+[data-theme="light"] .exec-hero-attain { background: var(--bg-surface-elevated); border-color: var(--border-card); }
+[data-theme="light"] .attain-head,
+[data-theme="light"] .attain-value small,
+[data-theme="light"] .month-strip-head { color: var(--text-muted); }
+[data-theme="light"] .attain-value { color: var(--text-primary); }
+[data-theme="light"] .attain-badge { background: var(--bg-glass); color: var(--text-secondary); }
+[data-theme="light"] .attain-badge[data-state="up"] { background: var(--accent-emerald-bg); color: var(--accent-emerald); }
+[data-theme="light"] .attain-badge[data-state="down"] { background: var(--accent-rose-bg); color: var(--accent-rose); }
+[data-theme="light"] .attain-track { background: #e6ebf1; }
+[data-theme="light"] .attain-track::after { background: #d99a06; }
+[data-theme="light"] .attain-ticks,
+[data-theme="light"] .ms-label,
+[data-theme="light"] .month-strip-legend { color: var(--text-muted); }
+[data-theme="light"] .attain-ticks i:nth-child(3) { color: var(--accent-amber); }
+[data-theme="light"] .month-strip-wrap { border-top-color: var(--border-card); }
+[data-theme="light"] .ms-plot { background: #eef2f6; }
+[data-theme="light"] .ms-col:hover .ms-plot { background: #e3e9f0; }
+[data-theme="light"] .ms-bar { background: #b9c4d2; }
+[data-theme="light"] .ms-target,
+[data-theme="light"] .lg-target { background: #d99a06; }
+[data-theme="light"] .is-pass .ms-bar { background: var(--pass); }
+[data-theme="light"] .is-miss .ms-bar { background: var(--miss); }
