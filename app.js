@@ -61,7 +61,73 @@ if (typeof Chart !== 'undefined') {
   Chart.defaults.animation.duration = 750;
   Chart.defaults.animation.easing = 'easeOutQuart';
   Chart.defaults.elements.line.tension = 0.35;
+  Chart.defaults.font.family = "'Prompt', sans-serif";
+  Chart.defaults.font.size = 12;
+
+  // ธีมกราฟกลางของทั้งระบบ: tooltip, legend, แกน และแท่ง ใช้สไตล์เดียวกันทุกกราฟ
+  Chart.register({
+    id: 'qtcTheme',
+    beforeInit(chart) {
+      const o = chart.config.options || (chart.config.options = {});
+      const dark = document.documentElement.dataset.theme === 'dark';
+      const muted = dark ? '#8a9ab0' : '#64748b';
+      const grid = dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)';
+      const font = (size, weight = '500') => ({ family: "'Prompt', sans-serif", size, weight });
+      o.plugins = o.plugins || {};
+      o.plugins.tooltip = Object.assign(o.plugins.tooltip || {}, {
+        backgroundColor: '#0a1a2e', titleColor: '#ffffff', bodyColor: '#d5deea', footerColor: '#a4b2c4',
+        borderColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1, padding: 12, cornerRadius: 8,
+        boxPadding: 4, usePointStyle: true, titleFont: font(12.5, '600'), bodyFont: font(12), footerFont: font(11.5)
+      });
+      if (o.plugins.legend?.display !== false) {
+        const legend = o.plugins.legend = o.plugins.legend || {};
+        legend.labels = Object.assign(legend.labels || {}, {
+          usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 16, color: muted, font: font(12)
+        });
+      }
+      Object.values(o.scales || {}).forEach(scale => {
+        scale.ticks = Object.assign(scale.ticks || {}, { color: muted, font: font(11.5, '400'), padding: 6 });
+        if (scale.grid?.display !== false) scale.grid = Object.assign(scale.grid || {}, { color: grid, drawTicks: false });
+        scale.border = { display: false };
+        if (scale.title?.display) Object.assign(scale.title, { color: muted, font: font(11.5) });
+      });
+      chart.config.data.datasets.forEach(d => {
+        if ((d.type || chart.config.type) === 'bar') {
+          d.borderRadius = 4;
+          d.maxBarThickness = d.maxBarThickness || 38;
+        }
+      });
+    }
+  });
 }
+
+// จัดคอลัมน์ตัวเลขในตารางทุกตารางให้ชิดขวาและไม่ตัดบรรทัด (คำนวณใหม่ทุกครั้งที่ตารางถูกเรนเดอร์)
+const NUMERIC_CELL = /^(ขาด|เกิน)?\s*[-+−▲▼]?\s*฿?\s*-?[\d,]+(\.\d+)?\s*(%|M|ล้าน|ล้านบาท|บาท|pts)?$/;
+const CODE_CELL = /^[A-Z]{1,5}[-\/]?\d[\w\-\/]*$/;
+function alignTableColumns(table) {
+  const rows = [...table.tBodies].flatMap(tb => [...tb.rows]);
+  if (!rows.length) return;
+  const columns = Math.max(...rows.map(r => r.cells.length));
+  for (let c = 0; c < columns; c++) {
+    const cells = rows.map(r => r.cells[c]).filter(cell => cell && cell.colSpan === 1);
+    const filled = cells.filter(cell => cell.textContent.trim() && cell.textContent.trim() !== '-' && cell.textContent.trim() !== '—');
+    const numeric = filled.filter(cell => NUMERIC_CELL.test(cell.textContent.trim().split('\n')[0].trim()));
+    const isNum = filled.length > 0 && numeric.length / filled.length >= 0.6;
+    cells.forEach(cell => {
+      cell.classList.toggle('num', isNum);
+      cell.classList.toggle('code', CODE_CELL.test(cell.textContent.trim()));
+    });
+    const th = table.tHead?.rows[0]?.cells[c];
+    if (th) th.classList.toggle('num', isNum);
+  }
+}
+const tableAligner = new MutationObserver(records => {
+  new Set(records.map(r => r.target.closest?.('table')).filter(Boolean)).forEach(alignTableColumns);
+});
+document.querySelectorAll('table.styled-table').forEach(t => {
+  tableAligner.observe(t, { childList: true, subtree: true });
+  alignTableColumns(t);
+});
 
 const QUARTER_MONTHS = {
   'Q1': ['JAN', 'FEB', 'MAR'],
@@ -2208,19 +2274,19 @@ function renderPICLeaderboard() {
     const thaiName = THAI_PIC_NAMES[p.name] || p.name;
 
     return `
-      <div class="card-box" style="padding: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span class="rank-badge">อันดับ #${idx + 1}</span>
-          <span class="kpi-badge success">สัดส่วน ${share}%</span>
-        </div>
-        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">${thaiName}</div>
-        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 6px;">ผู้รับผิดชอบจัดซื้อ (${p.name})</div>
-        <div style="font-size: 17px; font-weight: 700; color: var(--accent-emerald);">${formatCurrency(p.savings, 0)}</div>
-        <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted); margin-top: 6px; border-top: 1px dashed var(--border-subtle); padding-top: 6px;">
-          <span>${p.count} รายการ</span>
+      <article class="pic-card${idx === 0 ? ' is-leader' : ''}">
+        <header class="pic-card-head">
+          <span class="pic-rank">#${idx + 1}</span>
+          <span class="pic-share">${share}% ของทีม</span>
+        </header>
+        <div class="pic-card-name">${thaiName}</div>
+        <div class="pic-card-value">${formatCurrency(p.savings, 0)}</div>
+        <div class="pic-share-bar" aria-hidden="true"><span style="width: ${share}%"></span></div>
+        <footer class="pic-card-foot">
+          <span>${p.count.toLocaleString('th-TH')} รายการ</span>
           <span>ลดเฉลี่ย ${formatPercent(avgDisc, 1)}</span>
-        </div>
-      </div>
+        </footer>
+      </article>
     `;
   }).join('');
 
