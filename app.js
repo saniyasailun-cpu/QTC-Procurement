@@ -411,6 +411,7 @@ function initNavigation() {
 
 function switchView(viewName) {
   State.activeView = viewName;
+  document.body.dataset.view = viewName;
   
   document.querySelectorAll('.nav-item').forEach(el => {
     const isActive = el.getAttribute('data-view') === viewName;
@@ -602,14 +603,82 @@ function renderAllViews() {
   renderWorkbookSources();
 }
 
-// แถบสรุปผู้บริหาร (Executive Hero) + Sparkline บนการ์ด KPI จากข้อมูลรายเดือนจริง
-function sparkMarkup(values, w, h, cls) {
+// แถบสรุปผู้บริหาร (Executive Hero), แถบรายเดือน, เทียบปีก่อน และ Sparkline — คำนวณจากข้อมูลรายเดือนจริง
+function sparkMarkup(values, w, h) {
   if (values.length < 2) return '';
-  const max = Math.max(...values), min = Math.min(0, ...values), span = (max - min) || 1;
-  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 8)]);
+  const max = Math.max(...values), min = Math.min(...values), span = (max - min) || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 4 - ((v - min) / span) * (h - 10)]);
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
   const [lx, ly] = pts[pts.length - 1];
-  return `<path class="${cls}-area" d="${line}L${w},${h}L0,${h}Z"/><path class="${cls}-line" d="${line}"/><circle class="${cls}-dot" cx="${lx}" cy="${ly}" r="3"/>`;
+  return `<path class="kspark-line" d="${line}"/><circle class="kspark-dot" cx="${lx}" cy="${ly}" r="2.5"/>`;
+}
+
+const formatMillions = v => `฿${(v / 1e6).toFixed(2)} ล้าน`;
+
+// ตัวเลขการเงินแบบ terminal: สัญลักษณ์ ฿ เล็ก และทศนิยมสีจาง (เฉพาะค่าที่เป็นตัวเลขล้วน)
+function typesetFigure(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = el.textContent.trim();
+  const money = text.match(/^(-?)฿([\d,]+)(\.\d+)?$/);
+  const pct = text.match(/^([\d.]+)%$/);
+  if (money) el.innerHTML = `${money[1]}<span class="fig-unit">฿</span>${money[2]}<span class="fig-dec">${money[3] || ''}</span>`;
+  else if (pct) el.innerHTML = `${pct[1]}<span class="fig-unit fig-unit-after">%</span>`;
+}
+
+function monthlyForYear(year) {
+  const saved = State.activeYear;
+  State.activeYear = year;
+  try { return getMonthlyAggregatedData(); } finally { State.activeYear = saved; }
+}
+
+function renderKpiDeltas(all) {
+  document.querySelectorAll('#view-dashboard .kpi-delta').forEach(c => { c.hidden = true; });
+  if (State.activeYear === 'ALL') return;
+  const prevYear = String(Number(State.activeYear) - 1);
+  const months = new Set(State.activeMonth !== 'ALL'
+    ? [State.activeMonth] : all.filter(m => m.pv > 0 || m.cr > 0).map(m => m.month));
+  const prev = monthlyForYear(prevYear).filter(m => months.has(m.month));
+  const cur = all.filter(m => months.has(m.month));
+  const sum = (rows, k) => rows.reduce((s, m) => s + (m[k] || 0), 0);
+  const c = { cr: sum(cur, 'cr'), pv: sum(cur, 'pv'), credit: sum(cur, 'creditSaving') };
+  const p = { cr: sum(prev, 'cr'), pv: sum(prev, 'pv'), credit: sum(prev, 'creditSaving') };
+  const label = `เทียบช่วงเดียวกันปี ${Number(prevYear) + 543}`;
+  const show = (key, delta, text, tone) => {
+    const chip = document.querySelector(`#view-dashboard .kpi-delta[data-delta="${key}"]`);
+    if (!chip || !isFinite(delta)) return;
+    chip.hidden = false;
+    chip.dataset.tone = tone;
+    chip.textContent = `${delta >= 0 ? '▲' : '▼'} ${text}`;
+    chip.title = label;
+    chip.setAttribute('aria-label', `${delta >= 0 ? 'เพิ่มขึ้น' : 'ลดลง'} ${text} ${label}`);
+  };
+  const change = k => (p[k] > 0 ? (c[k] - p[k]) / p[k] : NaN);
+  const pctText = k => `${Math.abs(change(k) * 100).toFixed(1)}%`;
+  show('cr', change('cr'), pctText('cr'), change('cr') >= 0 ? 'up' : 'down');
+  show('pv', change('pv'), pctText('pv'), 'neutral');
+  show('credit', change('credit'), pctText('credit'), change('credit') >= 0 ? 'up' : 'down');
+  if (c.pv > 0 && p.pv > 0) {
+    const pts = (c.cr / c.pv - p.cr / p.pv) * 100;
+    show('pct', pts, `${Math.abs(pts).toFixed(2)} pts`, pts >= 0 ? 'up' : 'down');
+  }
+}
+
+function renderMonthStrip(all) {
+  const strip = document.getElementById('hero-month-strip');
+  const max = Math.max(1, ...all.map(m => Math.max(m.cr || 0, m.target || 0)));
+  strip.innerHTML = all.map(m => {
+    const has = m.pv > 0 || m.cr > 0;
+    const state = !has ? 'empty' : m.pct === null ? 'pending' : m.isPassed ? 'pass' : 'miss';
+    const dim = State.activeMonth !== 'ALL' && State.activeMonth !== m.month;
+    const tip = has
+      ? `${THAI_MONTHS[m.month]}: ลดได้ ${formatMillions(m.cr || 0)}${m.target ? ` · เป้า ${formatMillions(m.target)}` : ''}`
+      : `${THAI_MONTHS[m.month]}: ยังไม่มีข้อมูล`;
+    return `<div class="ms-col is-${state}${dim ? ' is-dim' : ''}" title="${tip}">`
+      + `<div class="ms-plot"><span class="ms-bar" style="height:${((m.cr || 0) / max) * 100}%"></span>`
+      + (m.target ? `<span class="ms-target" style="bottom:${(m.target / max) * 100}%"></span>` : '')
+      + `</div><span class="ms-label">${THAI_MONTHS_SHORT[m.month]}</span></div>`;
+  }).join('');
 }
 
 function renderExecHero() {
@@ -620,24 +689,37 @@ function renderExecHero() {
   const missing = scoped.some(m => m.missingPurchase || m.target === null);
   const target = scoped.reduce((s, m) => s + (m.target || 0), 0);
   const attain = !missing && target > 0 ? actual / target : null;
+  const gap = actual - target;
+  const scopedWithData = scoped.filter(m => m.pv > 0 || m.cr > 0);
+  const passed = scopedWithData.filter(m => m.isPassed).length;
 
   const yearText = State.activeYear === 'ALL' ? 'ทุกปี' : `ปี ${Number(State.activeYear) + 543}`;
   document.getElementById('hero-period').textContent = State.activeMonth === 'ALL'
     ? `${yearText} · ภาพรวมทั้งปี` : `${THAI_MONTHS[State.activeMonth]} ${yearText}`;
   const stamp = State.data?.generatedAt ? new Date(State.data.generatedAt) : null;
   document.getElementById('hero-live-label').textContent = stamp && !isNaN(stamp)
-    ? `อัปเดต ${stamp.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}` : 'ข้อมูลล่าสุด';
+    ? `ข้อมูล ณ ${stamp.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}` : 'ข้อมูลล่าสุด';
+
+  document.getElementById('hero-headline-value').textContent = formatMillions(actual);
+  document.getElementById('hero-sub').textContent = attain === null
+    ? 'มูลค่าซื้อรวมยังไม่ครบทุกเดือน จึงยังเทียบเป้าหมายไม่ได้'
+    : `${gap >= 0 ? 'สูงกว่า' : 'ต่ำกว่า'}เป้าหมาย ${(State.targetRate * 100).toFixed(1)}% ของมูลค่าสั่งซื้อ อยู่ ${formatMillions(Math.abs(gap))}`;
+  document.getElementById('hero-target').textContent = missing ? '—' : formatMillions(target);
+  const gapEl = document.getElementById('hero-gap');
+  gapEl.textContent = missing ? '—' : `${gap >= 0 ? '+' : '−'}${formatMillions(Math.abs(gap))}`;
+  gapEl.dataset.tone = missing ? '' : gap >= 0 ? 'up' : 'down';
+  document.getElementById('hero-months').textContent = scopedWithData.length ? `${passed} / ${scopedWithData.length} เดือน` : '—';
 
   const badge = document.getElementById('hero-attain-badge');
   document.getElementById('hero-attain-pct').textContent = attain === null ? '—' : (attain * 100).toFixed(0);
   document.getElementById('hero-attain-fill').style.width = `${attain === null ? 0 : Math.min(attain / 1.5, 1) * 100}%`;
   document.getElementById('hero-attain-bar').setAttribute('aria-label', attain === null
     ? 'ยังคำนวณความสำเร็จเทียบเป้าหมายไม่ได้' : `ทำได้ ${(attain * 100).toFixed(0)}% ของเป้าหมาย`);
-  badge.textContent = attain === null ? 'รอข้อมูลมูลค่าซื้อ' : attain >= 1 ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย';
+  badge.textContent = attain === null ? 'รอข้อมูล' : attain >= 1 ? 'ได้ตามเป้าหมาย' : 'ต่ำกว่าเป้าหมาย';
   badge.dataset.state = attain === null ? 'neutral' : attain >= 1 ? 'up' : 'down';
-  document.getElementById('hero-actual').textContent = formatCurrency(actual, 0);
-  document.getElementById('hero-target').textContent = missing ? '—' : formatCurrency(target, 0);
-  document.getElementById('hero-spark').innerHTML = sparkMarkup(months.map(m => m.cr || 0), 300, 64, 'hspark');
+
+  renderMonthStrip(all);
+  renderKpiDeltas(all);
 
   const series = {
     cr: months.map(m => m.cr || 0),
@@ -646,8 +728,9 @@ function renderExecHero() {
     credit: months.map(m => m.creditSaving || 0)
   };
   document.querySelectorAll('#view-dashboard .kpi-spark').forEach(svg => {
-    svg.innerHTML = sparkMarkup(series[svg.dataset.spark] || [], 200, 40, 'kspark');
+    svg.innerHTML = sparkMarkup(series[svg.dataset.spark] || [], 200, 40);
   });
+  ['kpi-total-savings', 'kpi-total-purchase', 'kpi-credit-savings', 'kpi-target-rate-display'].forEach(typesetFigure);
 }
 
 // รูปแบบตัวเลขและสกุลเงิน

@@ -23,7 +23,7 @@
   <!-- App Stylesheet -->
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-view="dashboard">
   <a class="skip-link" href="#main-content">ข้ามไปยังเนื้อหาหลัก</a>
   <!-- Full-screen Drag and Drop Overlay for dropping Excel file anywhere -->
   <div id="global-dropzone-overlay" class="global-dropzone-overlay" data-static-hide>
@@ -216,39 +216,41 @@
 
         <!-- ================= VIEW 1: ภาพรวมผู้บริหาร (DASHBOARD) ================= -->
         <section class="view-section active" id="view-dashboard">
-          <section class="exec-hero" aria-label="สรุปผลสำหรับผู้บริหาร">
+          <section class="exec-hero" aria-labelledby="hero-headline">
             <div class="exec-hero-main">
-              <span class="exec-eyebrow">QTC ENERGY / PROCUREMENT PERFORMANCE</span>
-              <h1>ทุกการต่อรอง <span>สร้างคุณค่า</span></h1>
-              <p>ผลลดต้นทุนจัดซื้อและส่วนลดซัพพลายเออร์ · ข้อมูลจริงจาก Google Sheets</p>
               <div class="exec-hero-meta">
-                <span class="live-chip"><span class="live-dot" aria-hidden="true"></span><span id="hero-live-label">ข้อมูลล่าสุด</span></span>
                 <span class="hero-period" id="hero-period">ปี 2569 · ภาพรวมทั้งปี</span>
+                <span class="hero-sep" aria-hidden="true"></span>
+                <span class="hero-stamp"><span class="stamp-dot" aria-hidden="true"></span><span id="hero-live-label">ข้อมูลล่าสุด</span></span>
               </div>
+              <h1 id="hero-headline">ลดต้นทุนจัดซื้อได้ <strong id="hero-headline-value">—</strong></h1>
+              <p class="hero-sub" id="hero-sub">กำลังคำนวณผลเทียบเป้าหมาย…</p>
+              <dl class="hero-facts">
+                <div><dt>เป้าหมาย</dt><dd id="hero-target">—</dd></div>
+                <div><dt>ส่วนต่างเทียบเป้า</dt><dd id="hero-gap">—</dd></div>
+                <div><dt>เดือนที่ผ่านเป้า</dt><dd id="hero-months">—</dd></div>
+              </dl>
               <div class="exec-hero-actions">
                 <button class="btn-hero-primary" onclick="startMotionPresentation()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                   เล่นพรีเซนเทชัน
                 </button>
-                <button class="btn-hero-ghost" onclick="switchView('kpi-tracking')">ดูรายงานฉบับเต็ม <span aria-hidden="true">↗</span></button>
+                <button class="btn-hero-link" onclick="switchView('kpi-tracking')">ดูรายงานฉบับเต็ม <span aria-hidden="true">→</span></button>
               </div>
             </div>
             <div class="exec-hero-attain">
               <div class="attain-head">
-                <span>ความสำเร็จเทียบเป้าหมายลดต้นทุน</span>
+                <span>ความสำเร็จเทียบเป้าหมาย</span>
                 <span class="attain-badge" id="hero-attain-badge">—</span>
               </div>
               <div class="attain-value"><span id="hero-attain-pct">—</span><small>%</small></div>
-              <div class="attain-bar" role="img" id="hero-attain-bar" aria-label="ความสำเร็จเทียบเป้าหมาย">
-                <span id="hero-attain-fill"></span><i class="attain-target" aria-hidden="true"></i>
+              <div class="attain-scale" id="hero-attain-bar" role="img" aria-label="ความสำเร็จเทียบเป้าหมาย">
+                <div class="attain-track"><span id="hero-attain-fill"></span></div>
+                <div class="attain-ticks" aria-hidden="true"><i>0%</i><i>50%</i><i class="is-target">100%</i><i>150%</i></div>
               </div>
-              <div class="attain-foot">
-                <span>ทำได้ <b id="hero-actual">฿0</b></span>
-                <span>เป้าหมาย <b id="hero-target">฿0</b></span>
-              </div>
-              <div class="hero-spark-wrap">
-                <span class="hero-spark-label">ผลลดต้นทุนรายเดือน</span>
-                <svg class="hero-spark" id="hero-spark" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="month-strip-wrap">
+                <div class="month-strip-head"><span>ผลรายเดือน เทียบเป้า</span><span class="month-strip-legend"><i class="lg-pass"></i>ผ่าน<i class="lg-miss"></i>ไม่ผ่าน<i class="lg-target"></i>เป้า</span></div>
+                <div class="month-strip" id="hero-month-strip" role="img" aria-label="ผลลดต้นทุนรายเดือนเทียบเป้าหมาย"></div>
               </div>
             </div>
           </section>
@@ -260,6 +262,7 @@
             <div class="kpi-card accent-glow-emerald">
               <div class="kpi-card-header">
                 <span class="kpi-card-title">รวมมูลค่าที่ต่อรองลดลงได้</span>
+                <span class="kpi-delta" data-delta="cr" hidden></span>
                 <div class="kpi-card-icon" style="color: var(--accent-emerald);">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
                 </div>
@@ -276,6 +279,7 @@
             <div class="kpi-card accent-glow-blue">
               <div class="kpi-card-header">
                 <span class="kpi-card-title">มูลค่าการสั่งซื้อรวม</span>
+                <span class="kpi-delta" data-delta="pv" hidden></span>
                 <div class="kpi-card-icon" style="color: var(--accent-primary);">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 </div>
@@ -292,6 +296,7 @@
             <div class="kpi-card accent-glow-orange">
               <div class="kpi-card-header">
                 <span class="kpi-card-title">สถานะเป้าหมาย KPI (3.00%)</span>
+                <span class="kpi-delta" data-delta="pct" hidden></span>
                 <div class="gauge-circle">
                   <svg viewBox="0 0 36 36">
                     <path class="gauge-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
@@ -312,6 +317,7 @@
             <div class="kpi-card accent-glow-amber">
               <div class="kpi-card-header">
                 <span class="kpi-card-title">ลดต้นทุนจากการเพิ่มเครดิตเทอม</span>
+                <span class="kpi-delta" data-delta="credit" hidden></span>
                 <div class="kpi-card-icon" style="color: var(--accent-orange);">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 </div>
