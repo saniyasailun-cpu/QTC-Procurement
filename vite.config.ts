@@ -143,7 +143,7 @@ function staticDataPlugin(): Plugin {
   return {
     name: 'static-data-plugin',
     generateBundle() {
-      for (const fileName of ['app.js', 'data.js', 'workbook-sync.js']) {
+      for (const fileName of ['app.js', 'data.js', 'workbook-sync.js', 'motion.js']) {
         this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(fileName) });
       }
     },
@@ -161,7 +161,8 @@ export default defineConfig(() => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // data files are rewritten by /api/upload-excel on every sheet sync; watching them reloads the page in a loop
+      watch: process.env.DISABLE_HMR === 'true' ? null : { ignored: ['**/data.json', '**/data.js', '**/*.xlsx', '**/graphify-out/**'] },
     },
   };
 });

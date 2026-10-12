@@ -162,6 +162,10 @@
               <option value="ALL">ภาพรวมทั้งปี</option><option value="JAN">มกราคม</option><option value="FEB">กุมภาพันธ์</option><option value="MAR">มีนาคม</option><option value="APR">เมษายน</option><option value="MAY">พฤษภาคม</option><option value="JUN">มิถุนายน</option><option value="JUL">กรกฎาคม</option><option value="AUG">สิงหาคม</option><option value="SEP">กันยายน</option><option value="OCT">ตุลาคม</option><option value="NOV">พฤศจิกายน</option><option value="DEC">ธันวาคม</option>
             </select>
           </div>
+          <button class="btn-action motion-start-btn" id="motion-start-btn" onclick="startMotionPresentation()" title="เล่นพรีเซนเทชันแบบเคลื่อนไหวพร้อมเสียง จากข้อมูลจริง">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            เล่นพรีเซนเทชัน
+          </button>
           <button class="btn-action btn-action-secondary" id="presentation-toggle" aria-pressed="false" onclick="togglePresentation()">โหมดนำเสนอ</button>
           <!-- ตัวกรองปี -->
           <div class="filter-pills" id="year-filter-group">
@@ -1260,5 +1264,6 @@
   <script src="data.js"></script>
   <script src="workbook-sync.js"></script>
   <script src="app.js"></script>
+  <script src="motion.js"></script>
 </body>
 </html>
